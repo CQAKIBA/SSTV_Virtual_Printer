@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SstvVPrinter.IppProbe/SstvVPrinter.IppProbe.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SstvVPrinter.IppProbe.Tests/SstvVPrinter.IppProbe.Tests.csproj" />
+  </Folder>
+</Solution>
