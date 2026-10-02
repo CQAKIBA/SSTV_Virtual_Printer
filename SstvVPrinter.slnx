@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/SstvVPrinter.IppProbe/SstvVPrinter.IppProbe.csproj" />
     <Project Path="src/SstvVPrinter.Sstv/SstvVPrinter.Sstv.csproj" />
+    <Project Path="src/SstvVPrinter.SstvTool/SstvVPrinter.SstvTool.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/SstvVPrinter.IppProbe.Tests/SstvVPrinter.IppProbe.Tests.csproj" />

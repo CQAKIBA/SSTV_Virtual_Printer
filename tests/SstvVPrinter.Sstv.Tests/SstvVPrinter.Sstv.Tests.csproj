@@ -14,5 +14,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\SstvVPrinter.Sstv\SstvVPrinter.Sstv.csproj" />
+    <ProjectReference Include="..\..\src\SstvVPrinter.SstvTool\SstvVPrinter.SstvTool.csproj" />
   </ItemGroup>
 </Project>
