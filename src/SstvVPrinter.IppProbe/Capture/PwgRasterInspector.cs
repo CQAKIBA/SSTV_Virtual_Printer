@@ -13,7 +13,7 @@ public static class PwgRasterInspector
             if (count < 4 || !sync.AsSpan().SequenceEqual("RaS2"u8)) return new(false);
             byte[] header = new byte[HeaderSize];
             try { await payload.ReadExactlyAsync(header, cancellationToken); } catch (EndOfStreamException e) { throw new InvalidDataException("Truncated PWG Raster page header.", e); }
-            return new(true, Int(header, 372), Int(header, 376), Int(header, 276), Int(header, 280), Int(header, 384), Int(header, 388), Int(header, 392), Int(header, 400));
+            return new(true, Int(header, 372), Int(header, 376), Int(header, 276), Int(header, 280), Int(header, 384), Int(header, 388), Int(header, 392), Int(header, 400), Int(header, 344), Int(header, 352), Int(header, 356));
         }
         finally { if (position.HasValue) payload.Position = position.Value; }
     }

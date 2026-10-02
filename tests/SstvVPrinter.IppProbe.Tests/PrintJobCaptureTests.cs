@@ -65,6 +65,17 @@ public sealed class PrintJobCaptureTests
         Assert.Equal([4, 5, 6], await File.ReadAllBytesAsync(jobs[1].PayloadPath));
     }
 
+    [Fact]
+    public void FindHighestJobId_uses_existing_completed_capture_numbers()
+    {
+        using var directory = new TemporaryDirectory();
+        File.WriteAllBytes(Path.Combine(directory.Path, "1.pwg"), []);
+        File.WriteAllText(Path.Combine(directory.Path, "12.json"), "{}");
+        File.WriteAllText(Path.Combine(directory.Path, "notes.json"), "{}");
+
+        Assert.Equal(12, PrintJobCapture.FindHighestJobId(directory.Path));
+    }
+
     private static ProbeJob Job(int id) => new(id, $"ipp://localhost/jobs/{id}", "tester", null);
 
     private sealed class GeneratedStream(long remaining) : Stream

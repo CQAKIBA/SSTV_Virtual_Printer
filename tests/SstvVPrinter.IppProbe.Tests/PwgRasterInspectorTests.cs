@@ -21,6 +21,8 @@ public sealed class PwgRasterInspectorTests
         Assert.Equal(300, report.XResolution); Assert.Equal(300, report.YResolution);
         Assert.Equal(8, report.BitsPerColor); Assert.Equal(24, report.BitsPerPixel);
         Assert.Equal(7440, report.BytesPerLine); Assert.Equal(19, report.ColorSpace);
+        Assert.Equal(1, report.Orientation);
+        Assert.Equal(595, report.PageWidthPoints); Assert.Equal(842, report.PageHeightPoints);
     }
 
     [Fact]
@@ -43,6 +45,8 @@ public sealed class PwgRasterInspectorTests
         "RaS2"u8.CopyTo(bytes);
         Span<byte> header = bytes.AsSpan(4);
         BinaryPrimitives.WriteInt32BigEndian(header[276..], 300); BinaryPrimitives.WriteInt32BigEndian(header[280..], 300);
+        BinaryPrimitives.WriteInt32BigEndian(header[344..], 1);
+        BinaryPrimitives.WriteInt32BigEndian(header[352..], 595); BinaryPrimitives.WriteInt32BigEndian(header[356..], 842);
         BinaryPrimitives.WriteInt32BigEndian(header[372..], 2480); BinaryPrimitives.WriteInt32BigEndian(header[376..], 3508);
         BinaryPrimitives.WriteInt32BigEndian(header[384..], 8); BinaryPrimitives.WriteInt32BigEndian(header[388..], 24);
         BinaryPrimitives.WriteInt32BigEndian(header[392..], 7440); BinaryPrimitives.WriteInt32BigEndian(header[400..], 19);

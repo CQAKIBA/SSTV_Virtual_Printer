@@ -6,6 +6,21 @@ namespace SstvVPrinter.IppProbe.Capture;
 
 public sealed class PrintJobCapture(CaptureOptions options)
 {
+    public static int FindHighestJobId(string directoryPath)
+    {
+        if (!Directory.Exists(directoryPath)) return 0;
+        int highest = 0;
+        foreach (string path in Directory.EnumerateFiles(directoryPath))
+        {
+            string extension = Path.GetExtension(path);
+            if (extension is not ".pwg" and not ".json") continue;
+            if (int.TryParse(Path.GetFileNameWithoutExtension(path), System.Globalization.NumberStyles.None,
+                    System.Globalization.CultureInfo.InvariantCulture, out int id) && id > highest && id < int.MaxValue)
+                highest = id;
+        }
+        return highest;
+    }
+
     public async Task<CapturedJob> CaptureAsync(ProbeJob job, Stream document, string documentFormat, CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(options.DirectoryPath);
