@@ -17,28 +17,29 @@ public sealed class PcmRendererTests
     [Fact]
     public async Task RenderAsync_keeps_every_boundary_and_total_within_one_sample()
     {
-        var durations = new[] { 0.00051, 0.00073, 0.00029, 0.00067 };
-        var spans = durations.Select(value => new ToneSpan(1200, value)).ToArray();
+        const double duration = 0.146432 / 320;
+        var spans = Enumerable.Repeat(new ToneSpan(1200, duration), 320 * 256).ToArray();
 
-        for (var count = 1; count <= spans.Length; count++)
+        foreach (var count in new[] { 1, 319, 320, 1000, spans.Length })
         {
             var samples = await CollectSamples(spans.Take(count));
-            var ideal = durations.Take(count).Sum() * 48_000;
-            Assert.InRange(Math.Abs(samples.Length - ideal), 0, 0.5);
+            var expectedBoundary = (long)Math.Round(count * duration * 48_000, MidpointRounding.AwayFromZero);
+            Assert.Equal(expectedBoundary, samples.LongLength);
         }
     }
 
     [Fact]
     public async Task RenderAsync_preserves_phase_across_blocks_and_spans()
     {
-        var spans = new[] { new ToneSpan(1000, 0.1), new ToneSpan(1700, 0.1) };
+        var spans = new[] { new ToneSpan(1000, 0.09731), new ToneSpan(1700, 0.1) };
         var actual = await CollectSamples(spans);
+        var transitionSample = (int)Math.Round(0.09731 * 48_000, MidpointRounding.AwayFromZero);
         var expected = new float[actual.Length];
         var phase = 0.0;
         for (var i = 0; i < expected.Length; i++)
         {
             expected[i] = (float)(0.8 * Math.Sin(phase));
-            phase += 2 * Math.PI * (i < 4800 ? 1000 : 1700) / 48_000;
+            phase += 2 * Math.PI * (i < transitionSample ? 1000 : 1700) / 48_000;
             phase %= 2 * Math.PI;
         }
 

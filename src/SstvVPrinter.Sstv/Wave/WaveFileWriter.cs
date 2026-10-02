@@ -26,7 +26,13 @@ public static class WaveFileWriter
                     var bytes = new byte[block.Samples.Length * 2];
                     for (var index = 0; index < block.Samples.Length; index++)
                     {
-                        var value = Math.Clamp(block.Samples.Span[index], -1f, 1f);
+                        var sourceValue = block.Samples.Span[index];
+                        if (!float.IsFinite(sourceValue))
+                        {
+                            throw new InvalidDataException("PCM samples must be finite.");
+                        }
+
+                        var value = Math.Clamp(sourceValue, -1f, 1f);
                         var pcm = value <= -1f ? short.MinValue : (short)Math.Round(value * short.MaxValue, MidpointRounding.AwayFromZero);
                         BinaryPrimitives.WriteInt16LittleEndian(bytes.AsSpan(index * 2), pcm);
                     }

@@ -34,6 +34,18 @@ public sealed class WaveFileWriterTests
         Assert.Equal(short.MinValue, BitConverter.ToInt16(bytes, 46));
     }
 
+    [Theory]
+    [InlineData(float.NaN)]
+    [InlineData(float.PositiveInfinity)]
+    [InlineData(float.NegativeInfinity)]
+    public async Task WriteAsync_rejects_nonfinite_pcm_without_publication(float value)
+    {
+        var path = TempPath();
+        await Assert.ThrowsAsync<InvalidDataException>(() => WaveFileWriter.WriteAsync(path, Blocks(new PcmBlock(0, new[] { value }))));
+        Assert.False(File.Exists(path));
+        Assert.Empty(TemporarySiblings(path));
+    }
+
     [Fact]
     public async Task WriteAsync_publishes_atomically()
     {
@@ -48,9 +60,23 @@ public sealed class WaveFileWriterTests
     public async Task WriteAsync_cancellation_and_failure_leave_destination_untouched()
     {
         var path = TempPath();
-        await File.WriteAllBytesAsync(path, [1, 2, 3]);
-        await Assert.ThrowsAsync<IOException>(() => WaveFileWriter.WriteAsync(path, Blocks(new PcmBlock(0, new float[] { 0 }))));
+        using var cancellation = new CancellationTokenSource();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => WaveFileWriter.WriteAsync(path, CancelAfterFirst(cancellation), cancellation.Token));
+        Assert.False(File.Exists(path));
+        Assert.Empty(TemporarySiblings(path));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => WaveFileWriter.WriteAsync(path, FailAfterFirst()));
+        Assert.False(File.Exists(path));
+        Assert.Empty(TemporarySiblings(path));
+    }
+
+    [Fact]
+    public async Task WriteAsync_publication_collision_preserves_competing_destination()
+    {
+        var path = TempPath();
+        await Assert.ThrowsAsync<IOException>(() => WaveFileWriter.WriteAsync(path, CollideAfterFirst(path)));
         Assert.Equal(new byte[] { 1, 2, 3 }, await File.ReadAllBytesAsync(path));
+        Assert.Empty(TemporarySiblings(path));
         File.Delete(path);
     }
 
@@ -73,6 +99,30 @@ public sealed class WaveFileWriterTests
     }
 
     private static string TempPath() => Path.Combine(Path.GetTempPath(), $"sstv-{Guid.NewGuid():N}.wav");
+
+    private static string[] TemporarySiblings(string path) => Directory.GetFiles(Path.GetDirectoryName(path)!, "." + Path.GetFileName(path) + ".*.tmp");
+
+    private static async IAsyncEnumerable<PcmBlock> CancelAfterFirst(CancellationTokenSource cancellation)
+    {
+        yield return new PcmBlock(0, new float[] { 0 });
+        cancellation.Cancel();
+        await Task.Yield();
+        cancellation.Token.ThrowIfCancellationRequested();
+    }
+
+    private static async IAsyncEnumerable<PcmBlock> FailAfterFirst()
+    {
+        yield return new PcmBlock(0, new float[] { 0 });
+        await Task.Yield();
+        throw new InvalidOperationException("Injected stream failure.");
+    }
+
+    private static async IAsyncEnumerable<PcmBlock> CollideAfterFirst(string path)
+    {
+        yield return new PcmBlock(0, new float[] { 0 });
+        await File.WriteAllBytesAsync(path, [1, 2, 3]);
+        yield return new PcmBlock(1, new float[] { 0 });
+    }
 
     private static async IAsyncEnumerable<PcmBlock> Blocks(PcmBlock first, params PcmBlock[] rest)
     {

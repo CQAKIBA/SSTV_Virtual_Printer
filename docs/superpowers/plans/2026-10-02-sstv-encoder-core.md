@@ -344,4 +344,3 @@ git commit -m "feat: add SSTV encoder validation tool"
 ## Completion Gate
 
 Do not connect the encoder to Windows audio playback until the four 1× modes decode correctly in an independent receiver and the automated timing suite is green. A 2× decode failure does not block standard 1× playback work, but it must remain labeled experimental until at least two independent receiver implementations decode it reliably.
-
