@@ -5,4 +5,7 @@
   <ItemGroup>
     <ProjectReference Include="..\SstvVPrinter.Sstv\SstvVPrinter.Sstv.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="SstvVPrinter.Imaging.Tests" />
+  </ItemGroup>
 </Project>
