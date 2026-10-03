@@ -52,3 +52,4 @@ static PixelRect FitBounds(int sourceWidth, int sourceHeight, int targetWidth, i
     return new((targetWidth - width) / 2, (targetHeight - height) / 2, width, height);
 }
 
+// End of the command-line entry point and its local helpers.
