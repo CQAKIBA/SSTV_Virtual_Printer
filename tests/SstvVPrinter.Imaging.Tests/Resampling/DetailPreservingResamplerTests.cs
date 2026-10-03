@@ -101,6 +101,36 @@ public sealed class DetailPreservingResamplerTests
             new DetailPreservingResampler().Fit(source, 320, 1, cancellation.Token));
     }
 
+    [Fact]
+    public void Enlarge_preserves_nonuniform_left_and_top_edges()
+    {
+        var horizontal = Page(2, 1, index => index == 0 ? new(0, 0, 0) : new(255, 255, 255));
+        var horizontalResult = new DetailPreservingResampler().Fit(horizontal, 4, 2);
+        Assert.Equal(new Rgb24(0, 0, 0), horizontalResult.GetPixel(0, 0));
+        Assert.True(horizontalResult.GetPixel(1, 0).R < horizontalResult.GetPixel(2, 0).R);
+        Assert.Equal(new Rgb24(255, 255, 255), horizontalResult.GetPixel(3, 0));
+
+        var vertical = Page(1, 2, index => index == 0 ? new(0, 0, 0) : new(255, 255, 255));
+        var verticalResult = new DetailPreservingResampler().Fit(vertical, 2, 4);
+        Assert.Equal(new Rgb24(0, 0, 0), verticalResult.GetPixel(0, 0));
+        Assert.True(verticalResult.GetPixel(0, 1).R < verticalResult.GetPixel(0, 2).R);
+        Assert.Equal(new Rgb24(255, 255, 255), verticalResult.GetPixel(0, 3));
+    }
+
+    [Fact]
+    public async Task Downscale_observes_cancellation_inside_large_source_footprint()
+    {
+        var source = SolidPage(5000, 5000, new(80, 90, 100));
+        using var cancellation = new CancellationTokenSource();
+        var task = Task.Run(() => new DetailPreservingResampler().Fit(source, 1, 1, cancellation.Token));
+        await Task.Delay(20);
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromMilliseconds(500), $"Cancellation took {stopwatch.Elapsed}.");
+    }
+
     private static DecodedPage SolidPage(int width, int height, Rgb24 color)
     {
         var bytes = new byte[checked(width * height * 3)];

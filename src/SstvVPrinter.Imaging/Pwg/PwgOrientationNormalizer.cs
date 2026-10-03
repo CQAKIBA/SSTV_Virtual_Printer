@@ -6,7 +6,8 @@ internal static class PwgOrientationNormalizer
         int physicalWidth,
         int physicalHeight,
         int orientation,
-        ReadOnlySpan<byte> physicalRgb)
+        ReadOnlySpan<byte> physicalRgb,
+        CancellationToken cancellationToken)
     {
         var logicalWidth = orientation is 1 or 3 ? physicalHeight : physicalWidth;
         var logicalHeight = orientation is 1 or 3 ? physicalWidth : physicalHeight;
@@ -14,8 +15,14 @@ internal static class PwgOrientationNormalizer
 
         for (var y = 0; y < logicalHeight; y++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             for (var x = 0; x < logicalWidth; x++)
             {
+                if ((x & 4095) == 0)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+
                 var (sourceX, sourceY) = orientation switch
                 {
                     0 => (x, y),

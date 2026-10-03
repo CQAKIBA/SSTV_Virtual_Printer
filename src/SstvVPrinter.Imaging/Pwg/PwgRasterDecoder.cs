@@ -71,7 +71,8 @@ public sealed class PwgRasterDecoder
         }
 
         var normalized = PwgOrientationNormalizer.Normalize(
-            header.Width, header.Height, header.Orientation, physicalPixels);
+            header.Width, header.Height, header.Orientation, physicalPixels, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         var metadata = new PwgPageMetadata(
             header.Width, header.Height, normalized.Width, normalized.Height,
             header.DpiX, header.DpiY, header.Orientation,

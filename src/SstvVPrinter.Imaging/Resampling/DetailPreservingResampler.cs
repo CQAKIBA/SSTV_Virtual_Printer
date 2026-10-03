@@ -49,7 +49,7 @@ public class DetailPreservingResampler
             for (var x = 0; x < fittedWidth; x++)
             {
                 var color = shrinks
-                    ? SampleArea(source, x, y, fittedWidth, fittedHeight)
+                    ? SampleArea(source, x, y, fittedWidth, fittedHeight, cancellationToken)
                     : SampleBilinear(source, x, y, fittedWidth, fittedHeight);
                 var offset = ((y * fittedWidth) + x) * 3;
                 working[offset] = SrgbTransfer.ToByte(color.R);
@@ -72,7 +72,13 @@ public class DetailPreservingResampler
         return new FittedImage(targetWidth, targetHeight, canvas, bounds);
     }
 
-    private static LinearColor SampleArea(DecodedPage source, int x, int y, int targetWidth, int targetHeight)
+    private static LinearColor SampleArea(
+        DecodedPage source,
+        int x,
+        int y,
+        int targetWidth,
+        int targetHeight,
+        CancellationToken cancellationToken)
     {
         var x0 = (double)x * source.Width / targetWidth;
         var x1 = (double)(x + 1) * source.Width / targetWidth;
@@ -87,6 +93,7 @@ public class DetailPreservingResampler
         var maximum = new LinearColor(0, 0, 0);
         var minimumLuminance = double.PositiveInfinity;
         var maximumLuminance = double.NegativeInfinity;
+        var cancellationCounter = 0;
 
         for (var sourceY = (int)Math.Floor(y0); sourceY < Math.Ceiling(y1); sourceY++)
         {
@@ -94,6 +101,11 @@ public class DetailPreservingResampler
             if (weightY <= 0 || sourceY >= source.Height) continue;
             for (var sourceX = (int)Math.Floor(x0); sourceX < Math.Ceiling(x1); sourceX++)
             {
+                if ((cancellationCounter++ & 4095) == 0)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+
                 var weightX = Math.Min(x1, sourceX + 1.0) - Math.Max(x0, sourceX);
                 if (weightX <= 0 || sourceX >= source.Width) continue;
                 var weight = weightX * weightY;
@@ -139,8 +151,8 @@ public class DetailPreservingResampler
 
     private static LinearColor SampleBilinear(DecodedPage source, int x, int y, int targetWidth, int targetHeight)
     {
-        var sourceX = ((x + 0.5) * source.Width / targetWidth) - 0.5;
-        var sourceY = ((y + 0.5) * source.Height / targetHeight) - 0.5;
+        var sourceX = Math.Clamp(((x + 0.5) * source.Width / targetWidth) - 0.5, 0, source.Width - 1.0);
+        var sourceY = Math.Clamp(((y + 0.5) * source.Height / targetHeight) - 0.5, 0, source.Height - 1.0);
         var x0 = Math.Clamp((int)Math.Floor(sourceX), 0, source.Width - 1);
         var y0 = Math.Clamp((int)Math.Floor(sourceY), 0, source.Height - 1);
         var x1 = Math.Min(x0 + 1, source.Width - 1);

@@ -1,4 +1,3 @@
-using System.Globalization;
 using SstvVPrinter.Imaging.Composition;
 using SstvVPrinter.Imaging.Header;
 using SstvVPrinter.Imaging.Model;
@@ -12,7 +11,7 @@ static async Task<int> RunAsync(string[] args)
 {
     try
     {
-        var options = ParseArguments(args);
+        var options = ToolOptionsParser.Parse(args);
         await using var source = new FileStream(options.Input, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.Asynchronous | FileOptions.SequentialScan);
         var page = await new PwgRasterDecoder().DecodeFirstPageAsync(source);
         var request = new CompositionRequest(options.Mode, options.Horizontal, options.CallSign, options.AcceptedAt);
@@ -43,7 +42,6 @@ static async Task<int> RunAsync(string[] args)
         return 1;
     }
 }
-
 static PixelRect FitBounds(int sourceWidth, int sourceHeight, int targetWidth, int targetHeight)
 {
     var sourceIsWider = (long)sourceWidth * targetHeight >= (long)sourceHeight * targetWidth;
@@ -54,47 +52,3 @@ static PixelRect FitBounds(int sourceWidth, int sourceHeight, int targetWidth, i
     return new((targetWidth - width) / 2, (targetHeight - height) / 2, width, height);
 }
 
-static ToolOptions ParseArguments(string[] args)
-{
-    if (args.Length != 12)
-    {
-        throw new ArgumentException("Expected --input, --mode, --horizontal, --callsign, --accepted-at, and --output.");
-    }
-
-    var values = new Dictionary<string, string>(StringComparer.Ordinal);
-    for (var index = 0; index < args.Length; index += 2)
-    {
-        if (!args[index].StartsWith("--", StringComparison.Ordinal) || !values.TryAdd(args[index], args[index + 1]))
-            throw new ArgumentException($"Invalid or duplicate argument: {args[index]}");
-    }
-
-    string Required(string name) => values.TryGetValue(name, out var value)
-        ? value
-        : throw new ArgumentException($"Missing argument: {name}");
-
-    var input = Required("--input");
-    var output = Required("--output");
-    if (!Path.IsPathFullyQualified(input) || !input.EndsWith(".pwg", StringComparison.OrdinalIgnoreCase))
-        throw new ArgumentException("--input must be an absolute .pwg path.");
-    if (!Path.IsPathFullyQualified(output) || !output.EndsWith(".ppm", StringComparison.OrdinalIgnoreCase))
-        throw new ArgumentException("--output must be an absolute .ppm path.");
-
-    var mode = Required("--mode").ToLowerInvariant() switch
-    {
-        "martin1" => SstvMode.Martin1,
-        "scottie1" => SstvMode.Scottie1,
-        "scottie2" => SstvMode.Scottie2,
-        "robot36" => SstvMode.Robot36,
-        var value => throw new ArgumentException($"Unsupported mode: {value}"),
-    };
-    if (!int.TryParse(Required("--horizontal"), NumberStyles.None, CultureInfo.InvariantCulture, out var horizontal))
-        throw new ArgumentException("--horizontal must be 1 or 2.");
-    if (!DateTimeOffset.TryParseExact(Required("--accepted-at"), "O", CultureInfo.InvariantCulture, DateTimeStyles.None, out var acceptedAt) &&
-        !DateTimeOffset.TryParse(Required("--accepted-at"), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out acceptedAt))
-        throw new ArgumentException("--accepted-at must be an ISO-8601 timestamp with an offset.");
-
-    return new(input, mode, horizontal, Required("--callsign"), acceptedAt, output);
-}
-
-internal sealed record ToolOptions(
-    string Input, SstvMode Mode, int Horizontal, string CallSign, DateTimeOffset AcceptedAt, string Output);

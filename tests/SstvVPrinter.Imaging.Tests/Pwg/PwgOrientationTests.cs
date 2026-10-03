@@ -45,4 +45,13 @@ public sealed class PwgOrientationTests
             Assert.Equal(expectedRedValues[index], page.GetPixel(x, y).R);
         }
     }
+
+    [Fact]
+    public void Normalize_observes_cancellation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        Assert.Throws<OperationCanceledException>(() =>
+            PwgOrientationNormalizer.Normalize(1, 1, 0, new byte[3], cancellation.Token));
+    }
 }
