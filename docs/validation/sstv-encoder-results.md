@@ -1,6 +1,6 @@
 # SSTV encoder validation results
 
-Automated timing, waveform, container, and deterministic-output tests are recorded by the test suite. Independent receiver decoding remains a manual completion gate.
+Automated timing, waveform, container, and deterministic-output tests are recorded by the test suite. On 2026-10-03, the user decoded all eight fixtures with the smartphone app reported as **SSTV Decorder**: VIS mode recognition succeeded and every color-bar image displayed normally. The app version and displayed decoded dimensions were not recorded.
 
 ## Generated fixture evidence — 2026-10-02
 
@@ -19,11 +19,11 @@ All eight Release fixtures were generated successfully at 48 kHz mono/16-bit PCM
 
 | Mode | Horizontal | Expected duration | Receiver/version | Detected mode | Decoded size | Colors/channels | Sync/slant | Result/notes |
 |---|---:|---:|---|---|---|---|---|---|
-| Martin 1 | 1× | 115.200176 s | Pending | Pending | Pending | Pending | Pending | Not yet decoded |
-| Scottie 1 | 1× | 110.543320 s | Pending | Pending | Pending | Pending | Pending | Not yet decoded |
-| Scottie 2 | 1× | 72.008152 s | Pending | Pending | Pending | Pending | Pending | Not yet decoded |
-| Robot 36 | 1× | 36.910000 s | Pending | Pending | Pending | Pending | Pending | Not yet decoded |
-| Martin 1 | 2× | 115.200176 s | Pending | Pending | Pending | Pending | Pending | Experimental; test after 1× passes |
-| Scottie 1 | 2× | 110.543320 s | Pending | Pending | Pending | Pending | Pending | Experimental; test after 1× passes |
-| Scottie 2 | 2× | 72.008152 s | Pending | Pending | Pending | Pending | Pending | Experimental; test after 1× passes |
-| Robot 36 | 2× | 36.910000 s | Pending | Pending | Pending | Pending | Pending | Experimental; test after 1× passes |
+| Martin 1 | 1× | 115.200176 s | SSTV Decorder / version not recorded | Martin 1 | Not recorded | Normal | Normal | Pass |
+| Scottie 1 | 1× | 110.543320 s | SSTV Decorder / version not recorded | Scottie 1 | Not recorded | Normal | Normal | Pass |
+| Scottie 2 | 1× | 72.008152 s | SSTV Decorder / version not recorded | Scottie 2 | Not recorded | Normal | Normal | Pass |
+| Robot 36 | 1× | 36.910000 s | SSTV Decorder / version not recorded | Robot 36 | Not recorded | Normal | Normal | Pass |
+| Martin 1 | 2× | 115.200176 s | SSTV Decorder / version not recorded | Martin 1 | Not recorded | Normal | Normal | Pass with one receiver; still experimental |
+| Scottie 1 | 2× | 110.543320 s | SSTV Decorder / version not recorded | Scottie 1 | Not recorded | Normal | Normal | Pass with one receiver; still experimental |
+| Scottie 2 | 2× | 72.008152 s | SSTV Decorder / version not recorded | Scottie 2 | Not recorded | Normal | Normal | Pass with one receiver; still experimental |
+| Robot 36 | 2× | 36.910000 s | SSTV Decorder / version not recorded | Robot 36 | Not recorded | Normal | Normal | Pass with one receiver; still experimental |
