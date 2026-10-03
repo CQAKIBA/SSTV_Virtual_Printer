@@ -42,6 +42,19 @@ public sealed class DecodedPage
         return new DecodedPage(width, height, rgb24.ToArray(), metadata);
     }
 
+    internal static DecodedPage CreateOwned(int width, int height, byte[] rgb24, PwgPageMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(rgb24);
+        ArgumentNullException.ThrowIfNull(metadata);
+        var expectedLength = checked(width * height * 3);
+        if (width <= 0 || height <= 0 || rgb24.Length != expectedLength)
+        {
+            throw new ArgumentException("Owned RGB buffer does not match its dimensions.", nameof(rgb24));
+        }
+
+        return new DecodedPage(width, height, rgb24, metadata);
+    }
+
     public Rgb24 GetPixel(int x, int y)
     {
         if ((uint)x >= (uint)Width)
