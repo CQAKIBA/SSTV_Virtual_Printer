@@ -2,9 +2,9 @@ using SstvVPrinter.Imaging.Model;
 
 namespace SstvVPrinter.Imaging.Resampling;
 
-public sealed class DetailPreservingResampler
+public class DetailPreservingResampler
 {
-    public FittedImage Fit(
+    public virtual FittedImage Fit(
         DecodedPage source,
         int targetWidth,
         int targetHeight,
