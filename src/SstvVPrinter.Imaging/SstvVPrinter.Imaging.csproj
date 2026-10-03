@@ -7,5 +7,6 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="SstvVPrinter.Imaging.Tests" />
+    <InternalsVisibleTo Include="SstvVPrinter.ImagingTool" />
   </ItemGroup>
 </Project>
