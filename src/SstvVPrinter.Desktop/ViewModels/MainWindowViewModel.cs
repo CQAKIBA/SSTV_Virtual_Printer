@@ -45,6 +45,9 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
     private string? _muteWarning;
 
     [ObservableProperty]
+    private string? _deviceError;
+
+    [ObservableProperty]
     private IReadOnlyList<PrintJob> _waitingJobs = [];
 
     [ObservableProperty]
@@ -74,10 +77,13 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
     [ObservableProperty]
     private bool _startAtSignIn = true;
 
+    [ObservableProperty]
+    private bool _isSelectedJobActive = true;
+
     public IReadOnlyList<SstvMode> AvailableModes { get; } = [SstvMode.Scottie2, SstvMode.Scottie1, SstvMode.Martin1, SstvMode.Robot36];
     public bool IsPreviewEmpty => PreviewBitmap is null;
-    public bool CanSend => IsReady && !IsSettingsLocked && SelectedAudioEndpoint?.IsAvailable is true;
-    public bool CanSaveWave => IsReady && !IsSettingsLocked;
+    public bool CanSend => IsReady && IsSelectedJobActive && !IsSettingsLocked && SelectedAudioEndpoint?.IsAvailable is true;
+    public bool CanSaveWave => IsReady && IsSelectedJobActive && !IsSettingsLocked;
     public bool CanDiscard => Preview is not null && !IsSettingsLocked;
 
     public async Task UpdatePreviewAsync(PrintJob job, TransmissionSettings settings)
@@ -118,7 +124,8 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
         {
-            ApplyTransmissionState(JobState.Stopped, 0, null);
+            if (generation == Volatile.Read(ref _preparationGeneration))
+                ApplyTransmissionState(JobState.Stopped, 0, null);
         }
     }
 
@@ -161,6 +168,7 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
 
     partial void OnPreviewBitmapChanged(Bitmap? value) => OnPropertyChanged(nameof(IsPreviewEmpty));
     partial void OnSelectedAudioEndpointChanged(AudioEndpointInfo? value) => NotifyActionState();
+    partial void OnIsSelectedJobActiveChanged(bool value) => NotifyActionState();
 
     private void NotifyActionState()
     {

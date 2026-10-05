@@ -26,6 +26,8 @@ public sealed class DesktopComposition : IAsyncDisposable
     private Task? _audioWatchTask;
     private Guid? _preparedJobId;
     private bool _updatingSelection;
+    private readonly object _queueIdentityGate = new();
+    private HashSet<Guid> _knownJobIds = [];
 
     private DesktopComposition(DesktopHost host, MainWindowViewModel viewModel, PrintJobQueue queue, TransmissionController transmission, IUserPreferencesStore preferencesStore, IAudioEndpointMonitor audioMonitor, ApplicationMenuViewModel menu)
     {
@@ -108,6 +110,7 @@ public sealed class DesktopComposition : IAsyncDisposable
         window.SendRequested = async () =>
         {
             if (ViewModel.Preview is not { } preview || ViewModel.SelectedAudioEndpoint is not { } endpoint) return;
+            if (Queue.Active?.Id != Queue.Selected?.Id) return;
             try
             {
                 await _transmission.SendAsync(preview, endpoint.Id, _shutdown.Token);
@@ -121,6 +124,7 @@ public sealed class DesktopComposition : IAsyncDisposable
         window.SaveWaveRequested = async path =>
         {
             if (ViewModel.Preview is not { } preview) return;
+            if (Queue.Active?.Id != Queue.Selected?.Id) return;
             try
             {
                 await _transmission.SaveWaveAsync(preview, path, _shutdown.Token);
@@ -208,21 +212,30 @@ public sealed class DesktopComposition : IAsyncDisposable
         ? TimeSpan.FromTicks((long)(preview.EstimatedDuration.Ticks * (1 - _transmission.Progress)))
         : null;
 
-    private void OnQueueChanged(PrintJobQueueSnapshot snapshot) => Dispatcher.UIThread.Post(() =>
+    private void OnQueueChanged(PrintJobQueueSnapshot snapshot)
     {
-        _ = HandleQueueSnapshotAsync(snapshot);
-    });
+        var currentIds = snapshot.Waiting.Select(job => job.Id).ToHashSet();
+        if (snapshot.Active is not null) currentIds.Add(snapshot.Active.Id);
+        bool containsNewJob;
+        lock (_queueIdentityGate)
+        {
+            containsNewJob = currentIds.Except(_knownJobIds).Any();
+            _knownJobIds = currentIds;
+        }
+        Dispatcher.UIThread.Post(() => _ = HandleQueueSnapshotAsync(snapshot, containsNewJob));
+    }
 
-    private async Task HandleQueueSnapshotAsync(PrintJobQueueSnapshot snapshot)
+    private async Task HandleQueueSnapshotAsync(PrintJobQueueSnapshot snapshot, bool containsNewJob)
     {
         try
         {
             ViewModel.WaitingJobs = snapshot.Waiting;
             _updatingSelection = true;
             ViewModel.SelectedJob = snapshot.Selected;
+            ViewModel.IsSelectedJobActive = snapshot.Selected?.Id == snapshot.Active?.Id;
             _updatingSelection = false;
             if (snapshot.Selected is not { } selected) return;
-            await Menu.ActivateAsync(_shutdown.Token);
+            if (containsNewJob) await Menu.ActivateAsync(_shutdown.Token);
             if (_transmission.State is JobState.Encoding or JobState.Transmitting) return;
             if (_preparedJobId == selected.Id && ViewModel.Preview is not null) return;
             await PrepareSelectedAsync(selected);
@@ -246,8 +259,11 @@ public sealed class DesktopComposition : IAsyncDisposable
     {
         try
         {
-            await foreach (var endpoints in _audioMonitor.WatchAsync(cancellationToken))
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+            while (!cancellationToken.IsCancellationRequested)
             {
+                var endpoints = await Task.Run(
+                    () => _audioMonitor.GetEndpointsAsync(cancellationToken).AsTask(), cancellationToken);
                 Dispatcher.UIThread.Post(() =>
                 {
                     var selectedId = ViewModel.SelectedAudioEndpoint?.Id;
@@ -256,9 +272,8 @@ public sealed class DesktopComposition : IAsyncDisposable
                         ?? endpoints.FirstOrDefault(item => item.IsDefault && item.IsAvailable)
                         ?? endpoints.FirstOrDefault(item => item.IsAvailable);
                     ApplyEndpointState(ViewModel);
-                    if (ViewModel.SelectedAudioEndpoint is null)
-                        ViewModel.ValidationError = "使用可能な音声出力デバイスがありません。";
                 });
+                await timer.WaitForNextTickAsync(cancellationToken);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
@@ -273,6 +288,7 @@ public sealed class DesktopComposition : IAsyncDisposable
         var endpoint = viewModel.SelectedAudioEndpoint;
         viewModel.VolumeText = endpoint?.VolumePercent is { } volume ? $"{Math.Round(volume):0}%" : "不明";
         viewModel.MuteWarning = endpoint?.IsMuted is true ? "MUTED / ミュート中" : null;
+        viewModel.DeviceError = endpoint is null ? "使用可能な音声出力デバイスがありません。" : null;
     }
 
     public async ValueTask DisposeAsync()

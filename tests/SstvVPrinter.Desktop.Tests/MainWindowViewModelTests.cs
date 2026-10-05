@@ -78,6 +78,24 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task Waiting_job_preview_cannot_send_or_save_ahead_of_fifo_active_job()
+    {
+        var service = new ControlledPreparationService();
+        var viewModel = new MainWindowViewModel(service)
+        {
+            SelectedAudioEndpoint = new AudioEndpointInfo("test", "Test", true, 50, false),
+            IsSelectedJobActive = false,
+        };
+        Task update = viewModel.UpdatePreviewAsync(CreateJob(), new TransmissionSettings("JA1UMW", SstvMode.Scottie2, 1));
+        service.Complete(0, 320, 256);
+        await update;
+
+        Assert.False(viewModel.CanSend);
+        Assert.False(viewModel.CanSaveWave);
+        Assert.True(viewModel.CanDiscard);
+    }
+
+    [Fact]
     public void Stop_cancels_preview_preparation()
     {
         var service = new ControlledPreparationService();
