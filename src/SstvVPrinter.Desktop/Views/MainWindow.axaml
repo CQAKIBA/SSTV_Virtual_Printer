@@ -7,6 +7,52 @@
     Height="720"
     MinWidth="760"
     MinHeight="560"
-    Background="{DynamicResource AppBackgroundBrush}">
-  <Grid Name="RootLayout" />
+    Background="{DynamicResource AppBackgroundBrush}"
+    Foreground="White"
+    x:CompileBindings="False">
+  <Grid Name="RootLayout" RowDefinitions="Auto,*">
+    <Menu Grid.Row="0" Background="#171E28">
+      <MenuItem Header="アプリ">
+        <MenuItem Header="起動時に自動実行" ToggleType="CheckBox" IsChecked="{Binding StartAtSignIn}" Click="OnStartupClick" />
+        <Separator />
+        <MenuItem Header="終了" Click="OnExitClick" />
+      </MenuItem>
+      <MenuItem Header="プリンタ">
+        <MenuItem Header="状態を確認" Click="OnVerifyPrinterClick" />
+        <MenuItem Header="登録" Click="OnRegisterPrinterClick" />
+        <MenuItem Header="修復" Click="OnRepairPrinterClick" />
+      </MenuItem>
+    </Menu>
+    <Grid Name="ContentLayout" Grid.Row="1" Margin="18" ColumnDefinitions="3*,340" ColumnSpacing="18">
+      <Grid Grid.Column="0" RowDefinitions="*,Auto" RowSpacing="12">
+        <Border AutomationProperties.Name="SSTV preview" Background="#080B10" BorderBrush="#00E5FF" BorderThickness="2" CornerRadius="8" Padding="12">
+          <Grid>
+            <Image Source="{Binding PreviewBitmap}" Stretch="Uniform" />
+            <TextBlock Text="印刷を待っています" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#697789" IsVisible="{Binding IsPreviewEmpty}" />
+          </Grid>
+        </Border>
+        <Border Grid.Row="1" AutomationProperties.Name="Print job queue" Background="#171E28" CornerRadius="8" Padding="12">
+          <StackPanel Spacing="8">
+            <TextBlock Text="PRINT QUEUE" Foreground="#FF27D8" FontWeight="Bold" />
+            <ListBox ItemsSource="{Binding WaitingJobs}" MinHeight="72" MaxHeight="128" />
+          </StackPanel>
+        </Border>
+      </Grid>
+      <ScrollViewer Name="ControlPanel" Grid.Column="1" VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="12">
+          <Border AutomationProperties.Name="Call sign" Classes="panel" IsEnabled="{Binding !IsSettingsLocked}"><StackPanel Spacing="6"><TextBlock Text="CALL SIGN" Classes="heading"/><TextBox Text="{Binding CallSign}" PlaceholderText="JA1UMW"/></StackPanel></Border>
+          <Border AutomationProperties.Name="Hardware" Classes="panel" IsEnabled="{Binding !IsSettingsLocked}"><StackPanel Spacing="6"><TextBlock Text="HARDWARE" Classes="heading"/><ComboBox ItemsSource="{Binding AudioEndpoints}" SelectedItem="{Binding SelectedAudioEndpoint}"/><TextBlock Text="{Binding VolumeText}"/></StackPanel></Border>
+          <Border AutomationProperties.Name="Protocol" Classes="panel" IsEnabled="{Binding !IsSettingsLocked}"><StackPanel Spacing="6"><TextBlock Text="PROTOCOL" Classes="heading"/><ComboBox ItemsSource="{Binding AvailableModes}" SelectedItem="{Binding SelectedMode}"/><CheckBox Content="水平解像度 2x" IsChecked="{Binding IsDoubleHorizontal}"/></StackPanel></Border>
+          <Border AutomationProperties.Name="Status" Classes="panel" BorderBrush="{Binding StatusBrush}"><StackPanel Spacing="6"><TextBlock Text="STATUS" Classes="heading"/><TextBlock Text="{Binding StatusText}" FontSize="18" FontWeight="Bold"/><ProgressBar Value="{Binding ProgressPercent}" Maximum="100"/><TextBlock Text="{Binding RemainingTimeText}"/></StackPanel></Border>
+          <Border AutomationProperties.Name="Actions" Classes="panel"><StackPanel Spacing="8"><TextBlock Text="{Binding MuteWarning}" Foreground="#FFDF30" FontWeight="Bold" FontSize="18"/><Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,*" RowSpacing="8" ColumnSpacing="8"><Button Content="送信" IsEnabled="{Binding CanSend}" Classes="send" Click="OnSendClick"/><Button Grid.Column="1" Content="WAV保存" IsEnabled="{Binding CanSaveWave}" Click="OnSaveWaveClick"/><Button Grid.Row="1" Content="破棄" IsEnabled="{Binding CanDiscard}" Click="OnDiscardClick"/><Button Grid.Row="1" Grid.Column="1" Content="停止" IsEnabled="{Binding CanStop}" Classes="stop" Click="OnStopClick"/></Grid></StackPanel></Border>
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+  </Grid>
+  <Window.Styles>
+    <Style Selector="Border.panel"><Setter Property="Background" Value="#171E28"/><Setter Property="BorderBrush" Value="#344050"/><Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="8"/><Setter Property="Padding" Value="14"/></Style>
+    <Style Selector="TextBlock.heading"><Setter Property="Foreground" Value="#00E5FF"/><Setter Property="FontWeight" Value="Bold"/></Style>
+    <Style Selector="Button.send"><Setter Property="Background" Value="#00E5FF"/><Setter Property="Foreground" Value="#061014"/><Setter Property="FontWeight" Value="Bold"/></Style>
+    <Style Selector="Button.stop"><Setter Property="Background" Value="#FF3D21"/><Setter Property="Foreground" Value="White"/></Style>
+  </Window.Styles>
 </Window>

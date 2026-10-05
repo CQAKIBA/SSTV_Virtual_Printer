@@ -46,6 +46,36 @@ public sealed class MainWindowViewModelTests
         Assert.Equal(2, viewModel.Preview.Options.HorizontalSampleMultiplier);
     }
 
+    [Fact]
+    public async Task Ready_preview_enables_send_save_and_discard_but_not_stop()
+    {
+        var service = new ControlledPreparationService();
+        var viewModel = new MainWindowViewModel(service);
+        Task update = viewModel.UpdatePreviewAsync(CreateJob(), new TransmissionSettings("JA1UMW", SstvMode.Scottie2, 1));
+        service.Complete(0, 320, 256);
+        await update;
+
+        Assert.True(viewModel.CanSend);
+        Assert.True(viewModel.CanSaveWave);
+        Assert.True(viewModel.CanDiscard);
+        Assert.False(viewModel.CanStop);
+        Assert.False(viewModel.IsSettingsLocked);
+    }
+
+    [Fact]
+    public void Transmitting_locks_settings_and_exposes_stop_and_remaining_time()
+    {
+        var viewModel = new MainWindowViewModel(new ControlledPreparationService());
+
+        viewModel.ApplyTransmissionState(JobState.Transmitting, 0.25, TimeSpan.FromSeconds(90));
+
+        Assert.True(viewModel.IsSettingsLocked);
+        Assert.True(viewModel.CanStop);
+        Assert.False(viewModel.CanSend);
+        Assert.Equal("送信中", viewModel.StatusText);
+        Assert.Equal("残り 01:30", viewModel.RemainingTimeText);
+    }
+
     private static PrintJob CreateJob() =>
         new(
             Guid.NewGuid(), "Paint", DateTimeOffset.UtcNow,
