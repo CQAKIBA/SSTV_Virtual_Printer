@@ -1,0 +1,11 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Styles.Resources>
+    <SolidColorBrush x:Key="AppBackgroundBrush" Color="#10141A" />
+    <SolidColorBrush x:Key="ReadyBrush" Color="#80FF3D" />
+    <SolidColorBrush x:Key="WarningBrush" Color="#FFDF30" />
+    <SolidColorBrush x:Key="TransmitBrush" Color="#FF3D21" />
+    <SolidColorBrush x:Key="CyanActionBrush" Color="#00E5FF" />
+    <SolidColorBrush x:Key="SelectionBrush" Color="#FF27D8" />
+  </Styles.Resources>
+</Styles>

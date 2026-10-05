@@ -40,7 +40,7 @@ The application will use the Microsoft IPP Class Driver and a loopback-only IPP 
 - Manual crop, pan, or zoom controls
 - Automatic left-side or orientation-dependent header placement
 - Advanced image or color correction
-- WAV file management
+- Long-term WAV library or recording management beyond explicit **Save WAV** export
 - Support for every SSTV mode
 
 ## 5. User Workflow
@@ -55,12 +55,12 @@ The application will use the Microsoft IPP Class Driver and a loopback-only IPP 
 ### 5.2 Printing and transmission
 
 1. The operator selects `SSTV Virtual Printer` in the source application's print dialog.
-2. The IPP host accepts the job and persists it to the local job store.
+2. The IPP host accepts the job into the process-local FIFO queue.
 3. The document decoder renders or decodes the first page. Remaining pages are ignored.
 4. The desktop application opens or signals that a new job is waiting.
 5. The transmission screen displays the final SSTV preview and settings.
-6. The operator reviews the call sign, optional comment, SSTV mode, audio device, and output level.
-7. The operator explicitly selects **Start transmission**.
+6. The operator reviews the call sign, SSTV mode, horizontal 1x/2x sampling option, selected audio device, and the read-only Windows volume/mute indication.
+7. The operator explicitly selects **Start transmission** or **Save WAV**.
 8. The application composes the header and content at the selected mode's native resolution, generates PCM audio, and plays it.
 9. The operator may stop playback at any time.
 
@@ -70,7 +70,7 @@ No print job is transmitted automatically.
 
 If a job arrives while another job is being reviewed or transmitted, it enters a small FIFO waiting queue. It must not replace the active job. After transmission completes or is stopped, the operator may open the next waiting job.
 
-Unsent jobs recovered after an abnormal exit require explicit review. They are never transmitted automatically.
+The FIFO is intentionally non-persistent. Closing the window keeps the process and queue alive in the notification area; explicit application exit warns when jobs remain and then discards them. Jobs are not recovered after process termination.
 
 ## 6. User Interface
 
@@ -79,16 +79,13 @@ The primary transmission screen contains:
 - A large preview of the exact image that will be encoded
 - SSTV mode selection: Martin 1, Scottie 1, Scottie 2, or Robot 36
 - A required call-sign field
-- An optional comment field
-- Image placement selection, with only **Fit entire page** exposed initially
 - Audio output device selection
-- Output-level control
-- Test-tone control
-- Start and stop controls
+- Read-only Windows output volume and a prominent mute warning
+- Send, Save WAV, Stop, and Discard controls
 - Current transmission state and waiting-job count
 - A notice when a received job contained more than one page
 
-The application persists the call sign, default mode, selected audio device, and output level. The optional comment belongs to a print job. A preference may determine whether a previous comment is retained or cleared for the next job.
+The application persists the call sign, default mode, horizontal 1x/2x option, selected audio device, and start-at-sign-in preference. It never changes Windows output volume or mute state.
 
 ## 7. Image Composition
 
@@ -103,7 +100,6 @@ The header is stored independently from the printed page and applied during fina
 The header must:
 
 - Display the configured call sign
-- Optionally display a per-job comment
 - Use high-contrast colors and a font size chosen for SSTV readability
 - Remain readable after encoding and decoding, not merely in the source preview
 - Prevent transmission if the required call sign is empty
@@ -131,7 +127,7 @@ Source application
     -> Windows print system / Microsoft IPP Class Driver
     -> Loopback IPP endpoint
     -> Print document decoder
-    -> Job store
+    -> In-memory FIFO queue
     -> Image composer
     -> SSTV encoder
     -> PCM audio engine
@@ -156,21 +152,20 @@ The decoder converts a supported IPP document payload into the application's can
 
 The decoder is selected through a format-based interface so that PDF, additional raster formats, or platform-specific inputs can be added later without changing downstream components.
 
-### 8.4 Job store
+### 8.4 Job queue
 
-The job store persists:
+The process-local job queue retains while the application is running:
 
 - A generated job identifier
 - Receipt time
 - Source application information when available
 - Page count when available
 - The canonical first-page bitmap or safely retained source payload
-- Per-job comment
 - Selected mode and composition settings
 - State: received, ready, transmitting, completed, stopped, or failed
 - Diagnostic failure information
 
-It uses a small FIFO waiting queue. Storage cleanup removes completed jobs before pending jobs. Pending jobs are not silently discarded because a storage limit was reached; instead, new intake is rejected with a clear capacity error.
+It uses FIFO order and never allows a newly received job to replace the active job. Completed and explicitly discarded jobs are removed immediately. The queue is deliberately not written to disk; explicit exit warns before pending jobs are discarded.
 
 ### 8.5 Image composer
 
@@ -196,15 +191,15 @@ The encoder must derive sample boundaries deterministically and must not depend 
 
 ### 8.7 Audio engine
 
-The audio engine enumerates Windows output devices and plays a supplied PCM stream. It owns output level, test tone, start, stop, underrun reporting, and device-loss handling. It contains no SSTV timing rules.
+The audio engine enumerates Windows output devices, reads their current master volume/mute state for display, and plays a supplied WAV/PCM stream. It owns start, stop, progress, underrun reporting, and device-loss handling. It does not change system or endpoint volume, does not provide a test tone, and contains no SSTV timing rules.
 
 A future transmission-control boundary surrounds playback with optional pre-send and post-send delays. The initial implementation uses a no-operation PTT provider. Future providers may implement RTS/DTR, CI-V, CAT, Hamlib, or external command invocation without modifying the encoder.
 
 ### 8.8 Desktop UI and host process
 
-The Windows implementation will use C# and a supported .NET desktop stack. The UI communicates with the job host through an explicit local interface rather than assuming that a background service can display windows in the interactive user session.
+The Windows implementation uses C#, .NET, and Avalonia. One per-user process owns the loopback IPP host, in-memory FIFO, preparation pipeline, tray icon, and interactive UI.
 
-The exact choice between a per-user background host and a Windows service is deferred to the initial IPP technical probe. The selected host must start reliably before the printer is used, bind only to loopback, and notify the interactive UI without launching UI directly from a service session.
+The application is single-instance, starts the IPP host only in the primary process, and may start at sign-in through a per-user registration. Closing the title-bar window hides it to the notification area; explicit Exit warns only when jobs are pending.
 
 ## 9. Error Handling
 
@@ -217,10 +212,9 @@ The exact choice between a per-user background host and a Windows service is def
 - Missing audio device before start: block transmission and require a valid selection.
 - Audio device loss during playback: stop immediately, report an incomplete transmission, and do not mark the job completed.
 - New job during playback: enqueue it without changing the active job.
-- Abnormal termination: recover pending jobs for review, never for automatic transmission.
-- Full job store: clean completed jobs first; otherwise reject new intake rather than deleting pending work.
+- Abnormal termination: discard the non-persistent queue; never transmit or reconstruct a job automatically.
 
-Logs must avoid retaining unrelated document contents. Diagnostic logs record identifiers, formats, sizes, state transitions, errors, and timing, while image payloads remain in the managed job store.
+Logs must avoid retaining unrelated document contents. Diagnostic logs record identifiers, formats, sizes, state transitions, errors, and timing; image payloads remain only in process memory for the active session.
 
 ## 10. Security and Resource Limits
 
@@ -254,7 +248,7 @@ Golden-image tests verify:
 - Fit-entire-page scaling for tall, wide, small, and oversized sources
 - No cropping of the page content
 - Correct top-header bounds
-- Required and optional text rendering
+- Required call-sign and mode/time text rendering
 - Stable output for identical inputs and settings
 
 Decoded over-the-air samples must also confirm that the header remains readable after realistic SSTV degradation.
@@ -275,7 +269,7 @@ Generated audio is decoded using more than one established SSTV receiver where p
 
 ### 11.4 Audio
 
-Tests cover device selection, level control, test tone, normal completion, manual stop, device loss, buffer underrun, and repeated playback. SSTV timing tests operate on generated samples independently of real-time device tests.
+Tests cover device selection, read-only volume/mute observation, normal completion, manual stop, device loss, buffer underrun, WAV export, and repeated playback. SSTV timing tests operate on generated samples independently of real-time device tests.
 
 ## 12. Delivery Sequence
 
@@ -291,4 +285,4 @@ The IPP interoperability probe is the architectural gate. Failure to receive a s
 
 ## 13. Future Extensions
 
-Potential later work includes additional SSTV modes, crop and alignment controls, automatic top/left header placement, PTT providers, WAV export, Linux and Raspberry Pi hosts, and optional LAN printing. These features must preserve the component boundaries above and are not prerequisites for the initial Windows release.
+Potential later work includes additional SSTV modes, crop and alignment controls, automatic top/left header placement, PTT providers, Linux and Raspberry Pi hosts, and optional LAN printing. These features must preserve the component boundaries above and are not prerequisites for the initial Windows release.
