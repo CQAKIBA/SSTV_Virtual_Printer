@@ -9,6 +9,7 @@
     <Project Path="src/SstvVPrinter.SstvTool/SstvVPrinter.SstvTool.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/SstvVPrinter.App.Tests/SstvVPrinter.App.Tests.csproj" />
     <Project Path="tests/SstvVPrinter.Desktop.Tests/SstvVPrinter.Desktop.Tests.csproj" />
     <Project Path="tests/SstvVPrinter.Imaging.Tests/SstvVPrinter.Imaging.Tests.csproj" />
     <Project Path="tests/SstvVPrinter.IppProbe.Tests/SstvVPrinter.IppProbe.Tests.csproj" />
