@@ -53,4 +53,16 @@ public sealed class RgbFrame
         var offset = ((y * Width) + x) * 3;
         return new Rgb24(_rgb24[offset], _rgb24[offset + 1], _rgb24[offset + 2]);
     }
+
+    public void CopyPixelsTo(Span<byte> destination)
+    {
+        if (destination.Length != _rgb24.Length)
+        {
+            throw new ArgumentException(
+                $"Expected a destination of {_rgb24.Length} bytes but received {destination.Length}.",
+                nameof(destination));
+        }
+
+        _rgb24.CopyTo(destination);
+    }
 }

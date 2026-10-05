@@ -62,4 +62,28 @@ public sealed class RgbFrameTests
 
         Assert.Throws<ArgumentOutOfRangeException>(() => frame.GetPixel(x, y));
     }
+
+    [Fact]
+    public void CopyPixelsTo_copies_exact_rgb_bytes_defensively()
+    {
+        var frame = RgbFrame.Create(2, 1, [1, 2, 3, 4, 5, 6]);
+        var destination = new byte[6];
+
+        frame.CopyPixelsTo(destination);
+        destination[0] = 99;
+
+        Assert.Equal([99, 2, 3, 4, 5, 6], destination);
+        Assert.Equal(new Rgb24(1, 2, 3), frame.GetPixel(0, 0));
+    }
+
+    [Theory]
+    [InlineData(SstvMode.Martin1, 115.200176)]
+    [InlineData(SstvMode.Scottie1, 110.543320)]
+    [InlineData(SstvMode.Scottie2, 72.008152)]
+    [InlineData(SstvMode.Robot36, 36.910000)]
+    public void Duration_estimator_uses_approved_mode_timing(SstvMode mode, double seconds)
+    {
+        Assert.Equal(seconds, SstvDurationEstimator.Estimate(new SstvEncodeOptions(mode)).TotalSeconds, 6);
+        Assert.Equal(seconds, SstvDurationEstimator.Estimate(new SstvEncodeOptions(mode, 2)).TotalSeconds, 6);
+    }
 }
