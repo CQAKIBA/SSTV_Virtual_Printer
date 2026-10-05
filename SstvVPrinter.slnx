@@ -1,5 +1,7 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/SstvVPrinter.App/SstvVPrinter.App.csproj" />
+    <Project Path="src/SstvVPrinter.Desktop/SstvVPrinter.Desktop.csproj" />
     <Project Path="src/SstvVPrinter.Imaging/SstvVPrinter.Imaging.csproj" />
     <Project Path="src/SstvVPrinter.ImagingTool/SstvVPrinter.ImagingTool.csproj" />
     <Project Path="src/SstvVPrinter.IppProbe/SstvVPrinter.IppProbe.csproj" />
@@ -7,6 +9,7 @@
     <Project Path="src/SstvVPrinter.SstvTool/SstvVPrinter.SstvTool.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/SstvVPrinter.Desktop.Tests/SstvVPrinter.Desktop.Tests.csproj" />
     <Project Path="tests/SstvVPrinter.Imaging.Tests/SstvVPrinter.Imaging.Tests.csproj" />
     <Project Path="tests/SstvVPrinter.IppProbe.Tests/SstvVPrinter.IppProbe.Tests.csproj" />
     <Project Path="tests/SstvVPrinter.Sstv.Tests/SstvVPrinter.Sstv.Tests.csproj" />
