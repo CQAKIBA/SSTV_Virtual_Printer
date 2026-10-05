@@ -10,6 +10,8 @@ public sealed class AvaloniaApplicationLifetimeService(
     Func<CancellationToken, Task<bool>> confirmPendingExit,
     Func<CancellationToken, Task> cleanup) : IApplicationLifetimeService
 {
+    private readonly ProcessExitCoordinator _exit = new(cleanup, () => lifetime.Shutdown(), Environment.Exit);
+
     public void ShowMainWindow()
     {
         window.Show();
@@ -24,7 +26,6 @@ public sealed class AvaloniaApplicationLifetimeService(
     public async Task ExitAsync(CancellationToken cancellationToken)
     {
         window.AllowExplicitClose = true;
-        await cleanup(cancellationToken);
-        lifetime.Shutdown();
+        await _exit.ExitAsync(cancellationToken);
     }
 }

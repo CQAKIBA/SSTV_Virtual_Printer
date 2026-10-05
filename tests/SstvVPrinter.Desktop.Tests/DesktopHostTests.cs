@@ -1,4 +1,7 @@
 using SstvVPrinter.Desktop.Hosting;
+using SstvVPrinter.IppProbe.Capture;
+using SstvVPrinter.IppProbe.Hosting;
+using SstvVPrinter.IppProbe.Ipp;
 
 namespace SstvVPrinter.Desktop.Tests;
 
@@ -22,6 +25,17 @@ public sealed class DesktopHostTests
         Assert.Equal(1, second.StopCount);
     }
 
+    [Fact]
+    public async Task Real_ipp_web_application_stops_and_disposes_boundedly()
+    {
+        var application = ProbeApplication.Build(new DiscardingPrintJobSink(), port: 0);
+        var service = new WebApplicationHostedService(application);
+
+        await service.StartAsync(TestContext.Current.CancellationToken);
+        await service.StopAsync(TestContext.Current.CancellationToken);
+        await service.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+    }
+
     private sealed class FakeService : IDesktopHostedService
     {
         public int StartCount { get; private set; }
@@ -29,5 +43,14 @@ public sealed class DesktopHostTests
         public Task StartAsync(CancellationToken cancellationToken) { StartCount++; return Task.CompletedTask; }
         public Task StopAsync(CancellationToken cancellationToken) { StopCount++; return Task.CompletedTask; }
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class DiscardingPrintJobSink : IPrintJobSink
+    {
+        public ValueTask AcceptAsync(
+            ProbeJob job,
+            Stream document,
+            string documentFormat,
+            CancellationToken cancellationToken) => ValueTask.CompletedTask;
     }
 }

@@ -1,4 +1,5 @@
 using SstvVPrinter.Desktop.Platforms.Windows;
+using System.ComponentModel;
 
 namespace SstvVPrinter.Desktop.Tests;
 
@@ -19,6 +20,16 @@ public sealed class WindowsLifetimeTests
     }
 
     [Fact]
+    public async Task Primary_instance_disposes_without_ever_receiving_activation()
+    {
+        var coordinator = new WindowsSingleInstanceCoordinator($"SstvVPrinter.Tests.{Guid.NewGuid():N}");
+        Assert.True(await coordinator.TryAcquireAsync(TestContext.Current.CancellationToken));
+
+        await coordinator.DisposeAsync().AsTask()
+            .WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
     public async Task Printer_commands_use_the_fixed_loopback_uri_and_display_name_as_structured_arguments()
     {
         var runner = new RecordingProcessRunner();
@@ -28,12 +39,14 @@ public sealed class WindowsLifetimeTests
         await service.RegisterAsync(TestContext.Current.CancellationToken);
         await service.RepairAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(4, runner.Invocations.Count);
+        Assert.Equal(3, runner.Invocations.Count);
         Assert.All(runner.Invocations, invocation => Assert.Equal("powershell.exe", invocation.FileName));
         Assert.False(runner.Invocations[0].ShowWindow);
+        Assert.False(runner.Invocations[0].RunElevated);
         Assert.True(runner.Invocations[1].ShowWindow);
+        Assert.True(runner.Invocations[1].RunElevated);
         Assert.True(runner.Invocations[2].ShowWindow);
-        Assert.True(runner.Invocations[3].ShowWindow);
+        Assert.True(runner.Invocations[2].RunElevated);
         Assert.Contains(runner.Invocations, invocation => invocation.Arguments.Contains("ipp://localhost:8631/ipp/print"));
         Assert.Contains(runner.Invocations, invocation => invocation.Arguments.Contains("SSTV Virtual Printer Probe"));
     }
@@ -48,6 +61,41 @@ public sealed class WindowsLifetimeTests
             service.RegisterAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains("プリンタ登録", error.Message);
+    }
+
+    [Fact]
+    public async Task Printer_registration_explains_that_administrator_permission_is_required()
+    {
+        var service = new WindowsPrinterRegistrationService(new ElevationDeniedProcessRunner());
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.RegisterAsync(TestContext.Current.CancellationToken));
+
+        Assert.Contains("管理者権限", error.Message);
+    }
+
+    [Fact]
+    public async Task Exit_sequence_cleans_up_before_shutdown_and_process_termination()
+    {
+        var events = new List<string>();
+        var cleanupCompletion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var coordinator = new ProcessExitCoordinator(
+            async cancellationToken =>
+            {
+                events.Add("cleanup-started");
+                await cleanupCompletion.Task.WaitAsync(cancellationToken);
+                events.Add("cleanup-finished");
+            },
+            () => events.Add("shutdown"),
+            exitCode => events.Add($"terminate-{exitCode}"));
+
+        var exit = coordinator.ExitAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(["cleanup-started"], events);
+
+        cleanupCompletion.SetResult();
+        await exit;
+
+        Assert.Equal(["cleanup-started", "cleanup-finished", "shutdown", "terminate-0"], events);
     }
 
     private sealed class RecordingProcessRunner : IProcessRunner
@@ -68,5 +116,11 @@ public sealed class WindowsLifetimeTests
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             throw new InvalidOperationException("Unreachable");
         }
+    }
+
+    private sealed class ElevationDeniedProcessRunner : IProcessRunner
+    {
+        public Task<ProcessResult> RunAsync(ProcessInvocation invocation, CancellationToken cancellationToken) =>
+            throw new Win32Exception(5, "Access is denied.");
     }
 }
