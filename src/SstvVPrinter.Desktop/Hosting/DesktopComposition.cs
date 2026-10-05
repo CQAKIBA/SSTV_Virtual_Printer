@@ -110,7 +110,7 @@ public sealed class DesktopComposition : IAsyncDisposable
         window.SendRequested = async () =>
         {
             if (ViewModel.Preview is not { } preview || ViewModel.SelectedAudioEndpoint is not { } endpoint) return;
-            if (Queue.Active?.Id != Queue.Selected?.Id) return;
+            if (Queue.Active is not { } active || Queue.Selected?.Id != active.Id) return;
             try
             {
                 await _transmission.SendAsync(preview, endpoint.Id, _shutdown.Token);
@@ -124,7 +124,7 @@ public sealed class DesktopComposition : IAsyncDisposable
         window.SaveWaveRequested = async path =>
         {
             if (ViewModel.Preview is not { } preview) return;
-            if (Queue.Active?.Id != Queue.Selected?.Id) return;
+            if (Queue.Active is not { } active || Queue.Selected?.Id != active.Id) return;
             try
             {
                 await _transmission.SaveWaveAsync(preview, path, _shutdown.Token);
@@ -229,12 +229,19 @@ public sealed class DesktopComposition : IAsyncDisposable
     {
         try
         {
-            ViewModel.WaitingJobs = snapshot.Waiting;
+            ViewModel.WaitingJobs = snapshot.Active is { } active
+                ? [active, .. snapshot.Waiting]
+                : [];
             _updatingSelection = true;
             ViewModel.SelectedJob = snapshot.Selected;
-            ViewModel.IsSelectedJobActive = snapshot.Selected?.Id == snapshot.Active?.Id;
+            ViewModel.IsSelectedJobActive = snapshot.Active is not null && snapshot.Selected?.Id == snapshot.Active.Id;
             _updatingSelection = false;
-            if (snapshot.Selected is not { } selected) return;
+            if (snapshot.Selected is not { } selected)
+            {
+                _preparedJobId = null;
+                ViewModel.ClearPreview();
+                return;
+            }
             if (containsNewJob) await Menu.ActivateAsync(_shutdown.Token);
             if (_transmission.State is JobState.Encoding or JobState.Transmitting) return;
             if (_preparedJobId == selected.Id && ViewModel.Preview is not null) return;

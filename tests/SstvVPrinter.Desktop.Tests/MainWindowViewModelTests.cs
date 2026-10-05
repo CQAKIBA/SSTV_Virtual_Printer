@@ -96,6 +96,26 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task Empty_queue_clear_removes_stale_preview_and_disables_all_actions()
+    {
+        var service = new ControlledPreparationService();
+        var viewModel = new MainWindowViewModel(service)
+        {
+            SelectedAudioEndpoint = new AudioEndpointInfo("test", "Test", true, 50, false),
+        };
+        Task update = viewModel.UpdatePreviewAsync(CreateJob(), new TransmissionSettings("JA1UMW", SstvMode.Scottie2, 1));
+        service.Complete(0, 320, 256);
+        await update;
+
+        viewModel.ClearPreview();
+
+        Assert.Null(viewModel.Preview);
+        Assert.False(viewModel.CanSend);
+        Assert.False(viewModel.CanSaveWave);
+        Assert.False(viewModel.CanDiscard);
+    }
+
+    [Fact]
     public void Stop_cancels_preview_preparation()
     {
         var service = new ControlledPreparationService();

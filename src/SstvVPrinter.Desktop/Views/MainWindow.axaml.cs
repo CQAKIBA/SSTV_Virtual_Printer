@@ -98,10 +98,12 @@ public sealed partial class MainWindow : Window
         if (DataContext is not MainWindowViewModel viewModel) return;
         viewModel.PropertyChanged += (_, args) =>
         {
-            if (args.PropertyName == nameof(MainWindowViewModel.Preview) && viewModel.Preview is { } preview)
+            if (args.PropertyName == nameof(MainWindowViewModel.Preview))
             {
                 viewModel.PreviewBitmap?.Dispose();
-                viewModel.PreviewBitmap = AvaloniaFrameBitmapFactory.Create(preview.Frame);
+                viewModel.PreviewBitmap = viewModel.Preview is { } preview
+                    ? AvaloniaFrameBitmapFactory.Create(preview.Frame)
+                    : null;
             }
         };
     }

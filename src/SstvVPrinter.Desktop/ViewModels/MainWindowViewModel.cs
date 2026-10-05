@@ -136,6 +136,18 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
         ApplyTransmissionState(JobState.Stopped, 0, null);
     }
 
+    public void ClearPreview()
+    {
+        _preparationCancellation?.Cancel();
+        Interlocked.Increment(ref _preparationGeneration);
+        Preview = null;
+        IsReady = false;
+        SelectedJob = null;
+        IsSelectedJobActive = false;
+        ApplyTransmissionState(JobState.Received, 0, null);
+        NotifyActionState();
+    }
+
     public void ApplyTransmissionState(JobState state, double progress, TimeSpan? remaining)
     {
         ProgressPercent = Math.Clamp(progress, 0, 1) * 100;
