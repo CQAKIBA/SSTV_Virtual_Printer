@@ -19,14 +19,22 @@ public sealed class DesktopComposition : IAsyncDisposable
     private readonly DesktopHost _host;
     private readonly TransmissionController _transmission;
     private readonly IUserPreferencesStore _preferencesStore;
+    private readonly IAudioEndpointMonitor _audioMonitor;
+    private readonly CancellationTokenSource _shutdown = new();
+    private readonly object _preferenceGate = new();
+    private Task _preferenceSaveTask = Task.CompletedTask;
+    private Task? _audioWatchTask;
+    private Guid? _preparedJobId;
+    private bool _updatingSelection;
 
-    private DesktopComposition(DesktopHost host, MainWindowViewModel viewModel, PrintJobQueue queue, TransmissionController transmission, IUserPreferencesStore preferencesStore, ApplicationMenuViewModel menu)
+    private DesktopComposition(DesktopHost host, MainWindowViewModel viewModel, PrintJobQueue queue, TransmissionController transmission, IUserPreferencesStore preferencesStore, IAudioEndpointMonitor audioMonitor, ApplicationMenuViewModel menu)
     {
         _host = host;
         ViewModel = viewModel;
         Queue = queue;
         _transmission = transmission;
         _preferencesStore = preferencesStore;
+        _audioMonitor = audioMonitor;
         Menu = menu;
     }
 
@@ -54,17 +62,6 @@ public sealed class DesktopComposition : IAsyncDisposable
             ?? endpoints.FirstOrDefault();
         ApplyEndpointState(viewModel);
 
-        queue.Changed += snapshot => Dispatcher.UIThread.Post(async () =>
-        {
-            viewModel.WaitingJobs = snapshot.Waiting;
-            if (snapshot.Selected is not { } selected) return;
-            window.Show();
-            window.WindowState = Avalonia.Controls.WindowState.Normal;
-            window.Activate();
-            await viewModel.UpdatePreviewAsync(selected, new TransmissionSettings(
-                viewModel.CallSign, viewModel.SelectedMode, viewModel.IsDoubleHorizontal ? 2 : 1));
-        });
-
         var sink = new PwgPrintJobSink(queue, new PwgRasterDecoder());
         var webApplication = ProbeApplication.Build(sink, 8631);
         var transmission = new TransmissionController(new TransmissionArtifactService(), new NaudioWavePlaybackService());
@@ -76,15 +73,31 @@ public sealed class DesktopComposition : IAsyncDisposable
             new WindowsPrinterRegistrationService(new ProcessRunner()),
             () => queue.Active is not null);
         var composition = new DesktopComposition(
-            new DesktopHost([new WebApplicationHostedService(webApplication)]), viewModel, queue, transmission, preferencesStore, menu);
+            new DesktopHost([new WebApplicationHostedService(webApplication)]), viewModel, queue, transmission, preferencesStore, audio, menu);
         composition.WireWindow(window);
-        await menu.InitializeAsync(cancellationToken);
-        viewModel.StartAtSignIn = menu.StartAtSignIn;
+        queue.Changed += composition.OnQueueChanged;
         composition.WirePreferencePersistence();
         return composition;
     }
 
-    public Task StartAsync(CancellationToken cancellationToken = default) => _host.StartAsync(cancellationToken);
+    public async Task StartAsync(CancellationToken cancellationToken = default)
+    {
+        await _host.StartAsync(cancellationToken);
+        _audioWatchTask = WatchAudioAsync(_shutdown.Token);
+    }
+
+    public async Task InitializeAncillaryAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await Menu.InitializeAsync(cancellationToken);
+            ViewModel.StartAtSignIn = Menu.StartAtSignIn;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            ViewModel.ValidationError = $"プリンタ状態を確認できません: {exception.Message}";
+        }
+    }
 
     private void WireWindow(MainWindow window)
     {
@@ -95,13 +108,34 @@ public sealed class DesktopComposition : IAsyncDisposable
         window.SendRequested = async () =>
         {
             if (ViewModel.Preview is not { } preview || ViewModel.SelectedAudioEndpoint is not { } endpoint) return;
-            await _transmission.SendAsync(preview, endpoint.Id, CancellationToken.None);
-            if (_transmission.State == JobState.Completed) Queue.CompleteActive();
+            try
+            {
+                await _transmission.SendAsync(preview, endpoint.Id, _shutdown.Token);
+                if (_transmission.State == JobState.Completed) Queue.CompleteActive();
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                ViewModel.ValidationError = $"送信に失敗しました: {exception.Message}";
+            }
         };
-        window.SaveWaveRequested = path => ViewModel.Preview is { } preview
-            ? _transmission.SaveWaveAsync(preview, path, CancellationToken.None)
-            : Task.CompletedTask;
-        window.StopRequested = _transmission.Stop;
+        window.SaveWaveRequested = async path =>
+        {
+            if (ViewModel.Preview is not { } preview) return;
+            try
+            {
+                await _transmission.SaveWaveAsync(preview, path, _shutdown.Token);
+                Queue.CompleteActive();
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                ViewModel.ValidationError = $"WAV保存に失敗しました: {exception.Message}";
+            }
+        };
+        window.StopRequested = () =>
+        {
+            ViewModel.CancelPreparation();
+            _transmission.Stop();
+        };
         window.DiscardRequested = () =>
         {
             if (Queue.Selected is { } selected) Queue.Discard(selected.Id);
@@ -110,7 +144,7 @@ public sealed class DesktopComposition : IAsyncDisposable
         {
             await Menu.SetStartAtSignInAsync(enabled);
             ViewModel.StartAtSignIn = enabled;
-            await SavePreferencesAsync();
+            QueuePreferenceSave();
         };
         window.ExitRequested = () => Menu.ExitAsync();
         window.VerifyPrinterRequested = async () =>
@@ -124,30 +158,115 @@ public sealed class DesktopComposition : IAsyncDisposable
 
     private void WirePreferencePersistence()
     {
-        ViewModel.PropertyChanged += async (_, args) =>
+        ViewModel.PropertyChanged += (_, args) =>
         {
+            if (args.PropertyName == nameof(MainWindowViewModel.SelectedJob)
+                && !_updatingSelection
+                && ViewModel.SelectedJob is { } selected)
+            {
+                Queue.Select(selected.Id);
+            }
             if (args.PropertyName is nameof(MainWindowViewModel.CallSign)
                 or nameof(MainWindowViewModel.SelectedMode)
                 or nameof(MainWindowViewModel.IsDoubleHorizontal)
                 or nameof(MainWindowViewModel.SelectedAudioEndpoint))
             {
-                await SavePreferencesAsync();
-                if (Queue.Selected is { } selected)
-                    await ViewModel.UpdatePreviewAsync(selected, new TransmissionSettings(ViewModel.CallSign, ViewModel.SelectedMode, ViewModel.IsDoubleHorizontal ? 2 : 1));
+                if (args.PropertyName == nameof(MainWindowViewModel.SelectedAudioEndpoint)) ApplyEndpointState(ViewModel);
+                QueuePreferenceSave();
+                if (Queue.Selected is { } jobToPrepare && _transmission.State is not (JobState.Encoding or JobState.Transmitting))
+                {
+                    _preparedJobId = null;
+                    Dispatcher.UIThread.Post(() => _ = PrepareSelectedAsync(jobToPrepare));
+                }
             }
         };
     }
 
-    private Task SavePreferencesAsync() => _preferencesStore.SaveAsync(new UserPreferences(
-        ViewModel.CallSign,
-        ViewModel.SelectedMode,
-        ViewModel.IsDoubleHorizontal ? 2 : 1,
-        ViewModel.SelectedAudioEndpoint?.Id,
-        ViewModel.StartAtSignIn));
+    private void QueuePreferenceSave()
+    {
+        var snapshot = CapturePreferences();
+        lock (_preferenceGate)
+        {
+            _preferenceSaveTask = SaveAfterAsync(_preferenceSaveTask, snapshot);
+        }
+    }
+
+    private async Task SaveAfterAsync(Task previous, UserPreferences snapshot)
+    {
+        try { await previous; }
+        catch { }
+        try { await _preferencesStore.SaveAsync(snapshot, _shutdown.Token); }
+        catch (OperationCanceledException) when (_shutdown.IsCancellationRequested) { }
+        catch (Exception exception) { ViewModel.ValidationError = $"設定を保存できません: {exception.Message}"; }
+    }
+
+    private UserPreferences CapturePreferences() => new(
+        ViewModel.CallSign, ViewModel.SelectedMode, ViewModel.IsDoubleHorizontal ? 2 : 1,
+        ViewModel.SelectedAudioEndpoint?.Id, ViewModel.StartAtSignIn);
 
     private TimeSpan? Remaining() => ViewModel.Preview is { } preview
         ? TimeSpan.FromTicks((long)(preview.EstimatedDuration.Ticks * (1 - _transmission.Progress)))
         : null;
+
+    private void OnQueueChanged(PrintJobQueueSnapshot snapshot) => Dispatcher.UIThread.Post(() =>
+    {
+        _ = HandleQueueSnapshotAsync(snapshot);
+    });
+
+    private async Task HandleQueueSnapshotAsync(PrintJobQueueSnapshot snapshot)
+    {
+        try
+        {
+            ViewModel.WaitingJobs = snapshot.Waiting;
+            _updatingSelection = true;
+            ViewModel.SelectedJob = snapshot.Selected;
+            _updatingSelection = false;
+            if (snapshot.Selected is not { } selected) return;
+            await Menu.ActivateAsync(_shutdown.Token);
+            if (_transmission.State is JobState.Encoding or JobState.Transmitting) return;
+            if (_preparedJobId == selected.Id && ViewModel.Preview is not null) return;
+            await PrepareSelectedAsync(selected);
+        }
+        catch (OperationCanceledException) when (_shutdown.IsCancellationRequested) { }
+        catch (Exception exception)
+        {
+            ViewModel.ValidationError = $"印刷ジョブを準備できません: {exception.Message}";
+        }
+        finally { _updatingSelection = false; }
+    }
+
+    private async Task PrepareSelectedAsync(PrintJob selected)
+    {
+        await ViewModel.UpdatePreviewAsync(selected, new TransmissionSettings(
+            ViewModel.CallSign, ViewModel.SelectedMode, ViewModel.IsDoubleHorizontal ? 2 : 1));
+        if (ViewModel.IsReady) _preparedJobId = selected.Id;
+    }
+
+    private async Task WatchAudioAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await foreach (var endpoints in _audioMonitor.WatchAsync(cancellationToken))
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    var selectedId = ViewModel.SelectedAudioEndpoint?.Id;
+                    ViewModel.AudioEndpoints = endpoints;
+                    ViewModel.SelectedAudioEndpoint = endpoints.FirstOrDefault(item => item.Id == selectedId && item.IsAvailable)
+                        ?? endpoints.FirstOrDefault(item => item.IsDefault && item.IsAvailable)
+                        ?? endpoints.FirstOrDefault(item => item.IsAvailable);
+                    ApplyEndpointState(ViewModel);
+                    if (ViewModel.SelectedAudioEndpoint is null)
+                        ViewModel.ValidationError = "使用可能な音声出力デバイスがありません。";
+                });
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        catch (Exception exception)
+        {
+            Dispatcher.UIThread.Post(() => ViewModel.ValidationError = $"音声デバイスを監視できません: {exception.Message}");
+        }
+    }
 
     private static void ApplyEndpointState(MainWindowViewModel viewModel)
     {
@@ -156,5 +275,18 @@ public sealed class DesktopComposition : IAsyncDisposable
         viewModel.MuteWarning = endpoint?.IsMuted is true ? "MUTED / ミュート中" : null;
     }
 
-    public ValueTask DisposeAsync() => _host.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        QueuePreferenceSave();
+        Task saveTask;
+        lock (_preferenceGate) saveTask = _preferenceSaveTask;
+        try { await saveTask; } catch { }
+        _shutdown.Cancel();
+        if (_audioWatchTask is not null)
+        {
+            try { await _audioWatchTask; } catch (OperationCanceledException) { }
+        }
+        await _host.DisposeAsync();
+        _shutdown.Dispose();
+    }
 }

@@ -48,6 +48,9 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
     private IReadOnlyList<PrintJob> _waitingJobs = [];
 
     [ObservableProperty]
+    private PrintJob? _selectedJob;
+
+    [ObservableProperty]
     private Bitmap? _previewBitmap;
 
     [ObservableProperty]
@@ -73,7 +76,7 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
 
     public IReadOnlyList<SstvMode> AvailableModes { get; } = [SstvMode.Scottie2, SstvMode.Scottie1, SstvMode.Martin1, SstvMode.Robot36];
     public bool IsPreviewEmpty => PreviewBitmap is null;
-    public bool CanSend => IsReady && !IsSettingsLocked && SelectedAudioEndpoint?.IsAvailable is not false;
+    public bool CanSend => IsReady && !IsSettingsLocked && SelectedAudioEndpoint?.IsAvailable is true;
     public bool CanSaveWave => IsReady && !IsSettingsLocked;
     public bool CanDiscard => Preview is not null && !IsSettingsLocked;
 
@@ -99,6 +102,7 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
         var generation = Interlocked.Increment(ref _preparationGeneration);
         IsReady = false;
         ValidationError = null;
+        ApplyTransmissionState(JobState.Preparing, 0, null);
         try
         {
             var normalized = settings with { CallSign = validation.Normalized };
@@ -114,17 +118,26 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
         {
+            ApplyTransmissionState(JobState.Stopped, 0, null);
         }
+    }
+
+    public void CancelPreparation()
+    {
+        _preparationCancellation?.Cancel();
+        IsReady = false;
+        ApplyTransmissionState(JobState.Stopped, 0, null);
     }
 
     public void ApplyTransmissionState(JobState state, double progress, TimeSpan? remaining)
     {
         ProgressPercent = Math.Clamp(progress, 0, 1) * 100;
-        IsSettingsLocked = state is JobState.Encoding or JobState.Transmitting;
+        IsSettingsLocked = state is JobState.Preparing or JobState.Encoding or JobState.Transmitting;
         CanStop = IsSettingsLocked;
         StatusText = state switch
         {
             JobState.Encoding => "信号生成中",
+            JobState.Preparing => "プレビュー生成中",
             JobState.Transmitting => "送信中",
             JobState.Ready => "送信準備完了",
             JobState.Completed => "送信完了",
@@ -136,6 +149,7 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
         {
             JobState.Transmitting => "#FF3D21",
             JobState.Encoding => "#FF9F1C",
+            JobState.Preparing => "#FF9F1C",
             JobState.Ready or JobState.Completed => "#80FF3D",
             _ => "#344050",
         };

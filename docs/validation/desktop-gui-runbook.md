@@ -44,7 +44,7 @@ Use this checklist for the Windows 11 milestone. Perform the full Windows 10 pas
 
 | Date | OS/build | Commit | Check area | Result | Notes |
 |---|---|---|---|---|---|
-| 2026-10-05 | Windows / .NET 10 | `7c7cf58` | Automated solution tests | Pass | 320 tests: SSTV 125, IPP 45, Imaging 99, App 32, Desktop 19 |
-| 2026-10-05 | Windows / .NET 10 | `7c7cf58` | Release build | Pass | 0 warnings, 0 errors |
+| 2026-10-05 | Windows / .NET 10 | Post-review HEAD | Automated solution tests | Pass | 322 tests: SSTV 125, IPP 45, Imaging 99, App 32, Desktop 21 |
+| 2026-10-05 | Windows / .NET 10 | Post-review HEAD | Release build | Pass | 0 warnings, 0 errors |
 | Pending | Windows 11 | Pending | Full run | Not run | Requires interactive operator validation |
 | Deferred | Windows 10 | Pending | Full run | Deferred | Agreed to perform after milestone stabilization |

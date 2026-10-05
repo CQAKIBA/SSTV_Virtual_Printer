@@ -1,4 +1,5 @@
 using SstvVPrinter.App.Jobs;
+using SstvVPrinter.App.Audio;
 using SstvVPrinter.App.Transmission;
 using SstvVPrinter.Desktop.ViewModels;
 using SstvVPrinter.Imaging.Model;
@@ -54,12 +55,39 @@ public sealed class MainWindowViewModelTests
         Task update = viewModel.UpdatePreviewAsync(CreateJob(), new TransmissionSettings("JA1UMW", SstvMode.Scottie2, 1));
         service.Complete(0, 320, 256);
         await update;
+        viewModel.SelectedAudioEndpoint = new AudioEndpointInfo("test", "Test", true, 50, false);
 
         Assert.True(viewModel.CanSend);
         Assert.True(viewModel.CanSaveWave);
         Assert.True(viewModel.CanDiscard);
         Assert.False(viewModel.CanStop);
         Assert.False(viewModel.IsSettingsLocked);
+    }
+
+    [Fact]
+    public async Task Ready_preview_without_audio_endpoint_blocks_send_but_allows_wave_save()
+    {
+        var service = new ControlledPreparationService();
+        var viewModel = new MainWindowViewModel(service);
+        Task update = viewModel.UpdatePreviewAsync(CreateJob(), new TransmissionSettings("JA1UMW", SstvMode.Scottie2, 1));
+        service.Complete(0, 320, 256);
+        await update;
+
+        Assert.False(viewModel.CanSend);
+        Assert.True(viewModel.CanSaveWave);
+    }
+
+    [Fact]
+    public void Stop_cancels_preview_preparation()
+    {
+        var service = new ControlledPreparationService();
+        var viewModel = new MainWindowViewModel(service);
+        _ = viewModel.UpdatePreviewAsync(CreateJob(), new TransmissionSettings("JA1UMW", SstvMode.Scottie2, 1));
+
+        viewModel.CancelPreparation();
+
+        Assert.True(service.Requests[0].CancellationToken.IsCancellationRequested);
+        Assert.Equal("停止しました", viewModel.StatusText);
     }
 
     [Fact]
