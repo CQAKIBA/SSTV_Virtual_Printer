@@ -9,6 +9,7 @@ namespace SstvVPrinter.Desktop.Views;
 
 public sealed partial class MainWindow : Window
 {
+    private bool _printerOperationRunning;
     public MainWindow()
     {
         AvaloniaXamlLoader.Load(this);
@@ -60,9 +61,17 @@ public sealed partial class MainWindow : Window
         if (sender is MenuItem item && StartupChanged is not null) await StartupChanged(item.IsChecked);
     }
     private async void OnExitClick(object? sender, RoutedEventArgs args) { if (ExitRequested is not null) await ExitRequested(); }
-    private async void OnVerifyPrinterClick(object? sender, RoutedEventArgs args) { if (VerifyPrinterRequested is not null) await VerifyPrinterRequested(); }
-    private async void OnRegisterPrinterClick(object? sender, RoutedEventArgs args) { if (RegisterPrinterRequested is not null) await RegisterPrinterRequested(); }
-    private async void OnRepairPrinterClick(object? sender, RoutedEventArgs args) { if (RepairPrinterRequested is not null) await RepairPrinterRequested(); }
+    private async void OnVerifyPrinterClick(object? sender, RoutedEventArgs args) => await RunPrinterOperationAsync(VerifyPrinterRequested);
+    private async void OnRegisterPrinterClick(object? sender, RoutedEventArgs args) => await RunPrinterOperationAsync(RegisterPrinterRequested);
+    private async void OnRepairPrinterClick(object? sender, RoutedEventArgs args) => await RunPrinterOperationAsync(RepairPrinterRequested);
+
+    private async Task RunPrinterOperationAsync(Func<Task>? operation)
+    {
+        if (_printerOperationRunning || operation is null) return;
+        _printerOperationRunning = true;
+        try { await operation(); }
+        finally { _printerOperationRunning = false; }
+    }
 
     public async Task<bool> ConfirmPendingExitAsync(CancellationToken cancellationToken)
     {

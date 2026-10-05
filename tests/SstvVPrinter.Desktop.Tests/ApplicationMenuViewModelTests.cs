@@ -33,6 +33,20 @@ public sealed class ApplicationMenuViewModelTests
     }
 
     [Fact]
+    public async Task Explicit_exit_awaits_application_cleanup()
+    {
+        var lifetime = new FakeLifetime { HoldExit = true };
+        var viewModel = Create(lifetime: lifetime);
+
+        var exit = viewModel.ExitAsync(TestContext.Current.CancellationToken);
+
+        Assert.False(exit.IsCompleted);
+        Assert.Equal(1, lifetime.ExitCount);
+        lifetime.CompleteExit();
+        await exit;
+    }
+
+    [Fact]
     public async Task Foreground_denial_flashes_and_notifies()
     {
         var attention = new FakeAttention { ForegroundResult = false };
@@ -61,6 +75,8 @@ public sealed class ApplicationMenuViewModelTests
         public bool ConfirmationResult { get; init; } = true;
         public int ConfirmationCount { get; private set; }
         public int ExitCount { get; private set; }
+        public bool HoldExit { get; init; }
+        private readonly TaskCompletionSource _exitCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public void HideMainWindow() { }
         public void ShowMainWindow() { }
         public Task<bool> ConfirmPendingExitAsync(CancellationToken cancellationToken)
@@ -68,7 +84,12 @@ public sealed class ApplicationMenuViewModelTests
             ConfirmationCount++;
             return Task.FromResult(ConfirmationResult);
         }
-        public void Exit() => ExitCount++;
+        public Task ExitAsync(CancellationToken cancellationToken)
+        {
+            ExitCount++;
+            return HoldExit ? _exitCompletion.Task.WaitAsync(cancellationToken) : Task.CompletedTask;
+        }
+        public void CompleteExit() => _exitCompletion.TrySetResult();
     }
 
     private sealed class FakeStartup(bool enabled) : IStartupRegistrationService

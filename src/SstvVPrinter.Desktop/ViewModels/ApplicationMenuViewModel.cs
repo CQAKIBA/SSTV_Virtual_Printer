@@ -43,7 +43,7 @@ public sealed partial class ApplicationMenuViewModel(
     public async Task ExitAsync(CancellationToken cancellationToken = default)
     {
         if (hasPendingJobs() && !await lifetime.ConfirmPendingExitAsync(cancellationToken)) return;
-        lifetime.Exit();
+        await lifetime.ExitAsync(cancellationToken);
     }
 
     public async Task RegisterPrinterAsync(CancellationToken cancellationToken = default)

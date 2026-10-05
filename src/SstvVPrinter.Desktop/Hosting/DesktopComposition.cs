@@ -28,6 +28,7 @@ public sealed class DesktopComposition : IAsyncDisposable
     private bool _updatingSelection;
     private readonly object _queueIdentityGate = new();
     private HashSet<Guid> _knownJobIds = [];
+    private int _disposed;
 
     private DesktopComposition(DesktopHost host, MainWindowViewModel viewModel, PrintJobQueue queue, TransmissionController transmission, IUserPreferencesStore preferencesStore, IAudioEndpointMonitor audioMonitor, ApplicationMenuViewModel menu)
     {
@@ -67,14 +68,22 @@ public sealed class DesktopComposition : IAsyncDisposable
         var sink = new PwgPrintJobSink(queue, new PwgRasterDecoder());
         var webApplication = ProbeApplication.Build(sink, 8631);
         var transmission = new TransmissionController(new TransmissionArtifactService(), new NaudioWavePlaybackService());
-        var lifetimeService = new AvaloniaApplicationLifetimeService(lifetime, window, window.ConfirmPendingExitAsync);
+        DesktopComposition? composition = null;
+        var lifetimeService = new AvaloniaApplicationLifetimeService(
+            lifetime,
+            window,
+            window.ConfirmPendingExitAsync,
+            async _ =>
+            {
+                if (composition is not null) await composition.DisposeAsync();
+            });
         var menu = new ApplicationMenuViewModel(
             lifetimeService,
             new WindowsStartupRegistrationService(Environment.ProcessPath ?? throw new InvalidOperationException("Executable path is unavailable.")),
             new WindowsUserAttentionService(() => window.TryGetPlatformHandle()?.Handle ?? 0),
             new WindowsPrinterRegistrationService(new ProcessRunner()),
             () => queue.Active is not null);
-        var composition = new DesktopComposition(
+        composition = new DesktopComposition(
             new DesktopHost([new WebApplicationHostedService(webApplication)]), viewModel, queue, transmission, preferencesStore, audio, menu);
         composition.WireWindow(window);
         queue.Changed += composition.OnQueueChanged;
@@ -156,8 +165,34 @@ public sealed class DesktopComposition : IAsyncDisposable
             await Menu.InitializeAsync();
             ViewModel.StatusText = Menu.PrinterIsRegistered is true ? "プリンタ登録済み" : "プリンタ未登録";
         };
-        window.RegisterPrinterRequested = async () => { await Menu.RegisterPrinterAsync(); ViewModel.StatusText = "プリンタを登録しました"; };
-        window.RepairPrinterRequested = async () => { await Menu.RepairPrinterAsync(); ViewModel.StatusText = "プリンタを修復しました"; };
+        window.RegisterPrinterRequested = () => RunPrinterOperationAsync(
+            "プリンタを登録しています（PowerShellを確認してください）...",
+            "プリンタを登録しました",
+            Menu.RegisterPrinterAsync);
+        window.RepairPrinterRequested = () => RunPrinterOperationAsync(
+            "プリンタを修復しています（PowerShellを確認してください）...",
+            "プリンタを修復しました",
+            Menu.RepairPrinterAsync);
+    }
+
+    private async Task RunPrinterOperationAsync(
+        string progressText,
+        string successText,
+        Func<CancellationToken, Task> operation)
+    {
+        ViewModel.ValidationError = null;
+        ViewModel.StatusText = progressText;
+        try
+        {
+            await operation(_shutdown.Token);
+            ViewModel.StatusText = successText;
+        }
+        catch (OperationCanceledException) when (_shutdown.IsCancellationRequested) { }
+        catch (Exception exception)
+        {
+            ViewModel.StatusText = "プリンタ操作に失敗しました";
+            ViewModel.ValidationError = exception.Message;
+        }
     }
 
     private void WirePreferencePersistence()
@@ -300,6 +335,7 @@ public sealed class DesktopComposition : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
         QueuePreferenceSave();
         Task saveTask;
         lock (_preferenceGate) saveTask = _preferenceSaveTask;

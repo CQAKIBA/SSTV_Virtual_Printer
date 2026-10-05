@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace SstvVPrinter.Desktop.Platforms.Windows;
 
-public sealed record ProcessInvocation(string FileName, IReadOnlyList<string> Arguments);
+public sealed record ProcessInvocation(string FileName, IReadOnlyList<string> Arguments, bool ShowWindow = false);
 public sealed record ProcessResult(int ExitCode, string StandardOutput, string StandardError);
 
 public interface IProcessRunner
@@ -16,16 +16,28 @@ public sealed class ProcessRunner : IProcessRunner
     {
         var startInfo = new ProcessStartInfo(invocation.FileName)
         {
-            CreateNoWindow = true,
+            CreateNoWindow = !invocation.ShowWindow,
             UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
+            RedirectStandardOutput = !invocation.ShowWindow,
+            RedirectStandardError = !invocation.ShowWindow,
         };
         foreach (var argument in invocation.Arguments) startInfo.ArgumentList.Add(argument);
         using var process = Process.Start(startInfo) ?? throw new InvalidOperationException($"Unable to start {invocation.FileName}.");
-        Task<string> output = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        Task<string> error = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken);
+        Task<string> output = invocation.ShowWindow ? Task.FromResult(string.Empty) : process.StandardOutput.ReadToEndAsync(cancellationToken);
+        Task<string> error = invocation.ShowWindow ? Task.FromResult(string.Empty) : process.StandardError.ReadToEndAsync(cancellationToken);
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                await process.WaitForExitAsync(CancellationToken.None);
+            }
+            throw;
+        }
         return new(process.ExitCode, await output, await error);
     }
 }

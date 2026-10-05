@@ -13,6 +13,7 @@ public sealed partial class App : Application
 {
     private DesktopComposition? _composition;
     private TrayIcon? _trayIcon;
+    private TrayIcons? _trayIcons;
     internal static WindowsSingleInstanceCoordinator? SingleInstance { get; set; }
 
     public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>();
@@ -26,14 +27,11 @@ public sealed partial class App : Application
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
             var window = new MainWindow();
             desktop.MainWindow = window;
-            desktop.Exit += async (_, _) =>
+            desktop.Exit += (_, _) =>
             {
                 _trayIcon?.Dispose();
-                if (_composition is not null)
-                {
-                    try { await _composition.DisposeAsync(); }
-                    catch (Exception exception) { System.Diagnostics.Trace.TraceError(exception.ToString()); }
-                }
+                _trayIcon = null;
+                _trayIcons = null;
             };
             if (SingleInstance is not null)
             {
@@ -59,7 +57,8 @@ public sealed partial class App : Application
                             window.Activate();
                         },
                         () => _ = _composition.Menu.ExitAsync());
-                    TrayIcon.SetIcons(this, new TrayIcons { _trayIcon });
+                    _trayIcons = new TrayIcons { _trayIcon };
+                    TrayIcon.SetIcons(this, _trayIcons);
                     await _composition.InitializeAncillaryAsync();
                 }
                 catch (Exception exception)

@@ -7,7 +7,8 @@ namespace SstvVPrinter.Desktop.Platforms.Windows;
 public sealed class AvaloniaApplicationLifetimeService(
     IClassicDesktopStyleApplicationLifetime lifetime,
     MainWindow window,
-    Func<CancellationToken, Task<bool>> confirmPendingExit) : IApplicationLifetimeService
+    Func<CancellationToken, Task<bool>> confirmPendingExit,
+    Func<CancellationToken, Task> cleanup) : IApplicationLifetimeService
 {
     public void ShowMainWindow()
     {
@@ -20,9 +21,10 @@ public sealed class AvaloniaApplicationLifetimeService(
     public Task<bool> ConfirmPendingExitAsync(CancellationToken cancellationToken) =>
         confirmPendingExit(cancellationToken);
 
-    public void Exit()
+    public async Task ExitAsync(CancellationToken cancellationToken)
     {
         window.AllowExplicitClose = true;
+        await cleanup(cancellationToken);
         lifetime.Shutdown();
     }
 }
