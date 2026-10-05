@@ -37,6 +37,33 @@ public sealed class IppEndpointTests
     }
 
     [Fact]
+    public async Task Post_print_job_invokes_injected_sink_once_and_returns_job_id()
+    {
+        var sink = new RecordingPrintJobSink();
+        await using var server = await ProbeServer.StartAsync(sink);
+
+        using HttpResponseMessage response = await server.PostAsync(Request(IppOperations.PrintJob, [1, 2, 3, 4]));
+        IppMessage message = await IppMessageReader.ReadAsync(
+            await response.Content.ReadAsStreamAsync(), CancellationToken.None);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(message.FindAttribute("job-id")!.Values.Single().AsInt32() > 0);
+        Assert.Equal(1, sink.AcceptCount);
+        Assert.Equal([1, 2, 3, 4], sink.Document);
+        Assert.Equal("image/pwg-raster", sink.DocumentFormat);
+    }
+
+    [Fact]
+    public async Task Post_print_job_sink_rejection_returns_413_without_job_id()
+    {
+        await using var server = await ProbeServer.StartAsync(new RejectingPrintJobSink());
+
+        using HttpResponseMessage response = await server.PostAsync(Request(IppOperations.PrintJob, [1]));
+
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Post_rejects_non_ipp_content_type()
     {
         await using var server = await ProbeServer.StartAsync();
@@ -129,6 +156,36 @@ public sealed class IppEndpointTests
             while (true) { await stream.WriteAsync(block); await stream.FlushAsync(); await Task.Delay(20); }
         }
     }
+
+    private sealed class RecordingPrintJobSink : IPrintJobSink
+    {
+        public int AcceptCount { get; private set; }
+        public byte[] Document { get; private set; } = [];
+        public string? DocumentFormat { get; private set; }
+
+        public async ValueTask AcceptAsync(
+            ProbeJob job,
+            Stream document,
+            string documentFormat,
+            CancellationToken cancellationToken)
+        {
+            AcceptCount++;
+            DocumentFormat = documentFormat;
+            using var copy = new MemoryStream();
+            await document.CopyToAsync(copy, cancellationToken);
+            Document = copy.ToArray();
+        }
+    }
+
+    private sealed class RejectingPrintJobSink : IPrintJobSink
+    {
+        public ValueTask AcceptAsync(
+            ProbeJob job,
+            Stream document,
+            string documentFormat,
+            CancellationToken cancellationToken) =>
+            ValueTask.FromException(new InvalidDataException("Rejected by bounded sink."));
+    }
 }
 
 internal sealed class ProbeServer : IAsyncDisposable
@@ -137,7 +194,7 @@ internal sealed class ProbeServer : IAsyncDisposable
     private ProbeServer(WebApplication app, HttpClient client, string captureDirectory) { this.app = app; Client = client; CaptureDirectory = captureDirectory; }
     public HttpClient Client { get; }
     public string CaptureDirectory { get; }
-    public static async Task<ProbeServer> StartAsync() { string directory = Path.Combine(Path.GetTempPath(), $"sstv-http-{Guid.NewGuid():N}"); Directory.CreateDirectory(directory); WebApplication app = ProbeApplication.Build(directory, 0); await app.StartAsync(); string address = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.First(v => v.Contains("127.0.0.1", StringComparison.Ordinal)); return new(app, new HttpClient { BaseAddress = new Uri(address) }, directory); }
+    public static async Task<ProbeServer> StartAsync(IPrintJobSink? sink = null) { string directory = Path.Combine(Path.GetTempPath(), $"sstv-http-{Guid.NewGuid():N}"); Directory.CreateDirectory(directory); WebApplication app = sink is null ? ProbeApplication.Build(directory, 0) : ProbeApplication.Build(sink, 0); await app.StartAsync(); string address = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.First(v => v.Contains("127.0.0.1", StringComparison.Ordinal)); return new(app, new HttpClient { BaseAddress = new Uri(address) }, directory); }
     public Task<HttpResponseMessage> PostAsync(HttpContent content) => Client.PostAsync("ipp/print", content);
     public async ValueTask DisposeAsync() { Client.Dispose(); await app.StopAsync(); await app.DisposeAsync(); if (Directory.Exists(CaptureDirectory)) Directory.Delete(CaptureDirectory, true); }
 }
