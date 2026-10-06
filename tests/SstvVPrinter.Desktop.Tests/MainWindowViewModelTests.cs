@@ -160,6 +160,47 @@ public sealed class MainWindowViewModelTests
         Assert.False(viewModel.CanSaveWave);
     }
 
+    [Fact]
+    public void Application_volume_is_greyed_while_idle_and_visible_while_transmitting()
+    {
+        var viewModel = new MainWindowViewModel(new ControlledPreparationService())
+        {
+            SelectedAudioEndpoint = new AudioEndpointInfo("test", "Test", true, 80, false)
+            {
+                AppVolumePercent = 35,
+                AppIsMuted = false,
+            },
+        };
+
+        viewModel.ApplyTransmissionState(JobState.Ready, 0, null);
+        Assert.False(viewModel.IsAppVolumeActive);
+        Assert.Equal("待機中", viewModel.AppVolumeText);
+
+        viewModel.ApplyTransmissionState(JobState.Transmitting, 0, null);
+        Assert.True(viewModel.IsAppVolumeActive);
+        Assert.Equal("35%", viewModel.AppVolumeText);
+        Assert.Equal(35, viewModel.AppVolumePercent);
+    }
+
+    [Fact]
+    public void Muted_application_session_warns_only_during_transmission()
+    {
+        var viewModel = new MainWindowViewModel(new ControlledPreparationService())
+        {
+            SelectedAudioEndpoint = new AudioEndpointInfo("test", "Test", true, 80, false)
+            {
+                AppVolumePercent = 25,
+                AppIsMuted = true,
+            },
+        };
+
+        viewModel.ApplyTransmissionState(JobState.Ready, 0, null);
+        Assert.Null(viewModel.MuteWarning);
+
+        viewModel.ApplyTransmissionState(JobState.Transmitting, 0, null);
+        Assert.Equal("APP MUTED / アプリ音量ミュート中", viewModel.MuteWarning);
+    }
+
     private static PrintJob CreateJob() =>
         new(
             Guid.NewGuid(), "Paint", DateTimeOffset.UtcNow,

@@ -33,4 +33,18 @@ public sealed class MainWindowLayoutTests
         Assert.Equal("OnCallSignKeyDown", textBox.Attribute("KeyDown")?.Value);
         Assert.Equal("OnCallSignLostFocus", textBox.Attribute("LostFocus")?.Value);
     }
+
+    [Fact]
+    public void Hardware_panel_contains_master_and_application_volume_bars()
+    {
+        var path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "SstvVPrinter.Desktop", "Views", "MainWindow.axaml"));
+        var document = XDocument.Load(path);
+        var automationNames = document.Descendants()
+            .Select(element => element.Attribute("AutomationProperties.Name")?.Value)
+            .Where(value => value is not null)
+            .ToArray();
+
+        Assert.Contains("Master volume", automationNames);
+        Assert.Contains("Application volume", automationNames);
+    }
 }

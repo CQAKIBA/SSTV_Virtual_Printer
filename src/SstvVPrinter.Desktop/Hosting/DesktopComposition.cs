@@ -343,10 +343,7 @@ public sealed class DesktopComposition : IAsyncDisposable
 
     private static void ApplyEndpointState(MainWindowViewModel viewModel)
     {
-        var endpoint = viewModel.SelectedAudioEndpoint;
-        viewModel.VolumeText = endpoint?.VolumePercent is { } volume ? $"{Math.Round(volume):0}%" : "不明";
-        viewModel.MuteWarning = endpoint?.IsMuted is true ? "MUTED / ミュート中" : null;
-        viewModel.DeviceError = endpoint is null ? "使用可能な音声出力デバイスがありません。" : null;
+        viewModel.RefreshAudioDisplay();
     }
 
     public async ValueTask DisposeAsync()

@@ -87,6 +87,19 @@ public sealed class AudioEndpointViewModelTests
         Assert.DoesNotContain(methodNames, name => name.Contains("SetMute", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void Endpoint_display_name_uses_guid_tail_and_default_marker()
+    {
+        var endpoint = new AudioEndpointInfo(
+            "{0.0.0.00000000}.{12345678-1234-1234-1234-ABCDEF123456}",
+            "USB Audio", true, 50, false)
+        {
+            IsDefault = true,
+        };
+
+        Assert.Equal("USB Audio - ABCDEF123456 (既定)", endpoint.DisplayName);
+    }
+
     private static AudioEndpointInfo Endpoint(
         string id,
         string name,

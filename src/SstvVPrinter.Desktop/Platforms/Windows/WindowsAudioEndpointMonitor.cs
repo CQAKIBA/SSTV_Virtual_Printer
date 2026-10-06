@@ -32,6 +32,8 @@ public sealed class WindowsAudioEndpointMonitor : IAudioEndpointMonitor
             {
                 float? volume = null;
                 bool? muted = null;
+                float? appVolume = null;
+                bool? appMuted = null;
                 try
                 {
                     volume = device.AudioEndpointVolume.MasterVolumeLevelScalar * 100f;
@@ -41,9 +43,30 @@ public sealed class WindowsAudioEndpointMonitor : IAudioEndpointMonitor
                 {
                 }
 
+                try
+                {
+                    using var sessionManager = device.AudioSessionManager;
+                    sessionManager.RefreshSessions();
+                    using var sessions = sessionManager.Sessions;
+                    for (var index = 0; index < sessions.Count; index++)
+                    {
+                        using var session = sessions[index];
+                        if (session.GetProcessID != (uint)Environment.ProcessId) continue;
+                        using var sessionVolume = session.SimpleAudioVolume;
+                        var candidateVolume = sessionVolume.Volume * 100f;
+                        appVolume = appVolume is null ? candidateVolume : Math.Min(appVolume.Value, candidateVolume);
+                        appMuted = appMuted is true || sessionVolume.Mute;
+                    }
+                }
+                catch (COMException)
+                {
+                }
+
                 result.Add(new(device.ID, device.FriendlyName, true, volume, muted)
                 {
                     IsDefault = device.ID == defaultId,
+                    AppVolumePercent = appVolume,
+                    AppIsMuted = appMuted,
                 });
             }
         }

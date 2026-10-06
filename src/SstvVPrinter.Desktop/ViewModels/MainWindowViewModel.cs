@@ -42,6 +42,18 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
     private string _volumeText = "不明";
 
     [ObservableProperty]
+    private double _masterVolumePercent;
+
+    [ObservableProperty]
+    private string _appVolumeText = "待機中";
+
+    [ObservableProperty]
+    private double _appVolumePercent;
+
+    [ObservableProperty]
+    private bool _isAppVolumeActive;
+
+    [ObservableProperty]
     private string? _muteWarning;
 
     [ObservableProperty]
@@ -151,6 +163,7 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
     public void ApplyTransmissionState(JobState state, double progress, TimeSpan? remaining)
     {
         ProgressPercent = Math.Clamp(progress, 0, 1) * 100;
+        IsAppVolumeActive = state == JobState.Transmitting;
         IsSettingsLocked = state is JobState.Encoding or JobState.Transmitting;
         CanStop = state is JobState.Preparing or JobState.Encoding or JobState.Transmitting;
         StatusText = state switch
@@ -175,11 +188,16 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
         RemainingTimeText = remaining is { } value
             ? $"残り {(int)value.TotalMinutes:00}:{value.Seconds:00}"
             : null;
+        RefreshAudioDisplay();
         NotifyActionState();
     }
 
     partial void OnPreviewBitmapChanged(Bitmap? value) => OnPropertyChanged(nameof(IsPreviewEmpty));
-    partial void OnSelectedAudioEndpointChanged(AudioEndpointInfo? value) => NotifyActionState();
+    partial void OnSelectedAudioEndpointChanged(AudioEndpointInfo? value)
+    {
+        RefreshAudioDisplay();
+        NotifyActionState();
+    }
     partial void OnIsSelectedJobActiveChanged(bool value) => NotifyActionState();
 
     private void NotifyActionState()
@@ -187,5 +205,24 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
         OnPropertyChanged(nameof(CanSend));
         OnPropertyChanged(nameof(CanSaveWave));
         OnPropertyChanged(nameof(CanDiscard));
+    }
+
+    public void RefreshAudioDisplay()
+    {
+        var endpoint = SelectedAudioEndpoint;
+        VolumeText = endpoint?.VolumePercent is { } master ? $"{Math.Round(master):0}%" : "不明";
+        MasterVolumePercent = endpoint?.VolumePercent ?? 0;
+        AppVolumeText = !IsAppVolumeActive
+            ? "待機中"
+            : endpoint?.AppVolumePercent is { } app ? $"{Math.Round(app):0}%" : "検出中";
+        AppVolumePercent = IsAppVolumeActive ? endpoint?.AppVolumePercent ?? 0 : 0;
+        MuteWarning = endpoint?.IsMuted is true
+            ? "MUTED / マスター音量ミュート中"
+            : IsAppVolumeActive && endpoint?.AppIsMuted is true
+                ? "APP MUTED / アプリ音量ミュート中"
+                : IsAppVolumeActive && endpoint?.AppVolumePercent is <= 5
+                    ? "APP VOLUME LOW / アプリ音量が低すぎます"
+                    : null;
+        DeviceError = endpoint is null ? "使用可能な音声出力デバイスがありません。" : null;
     }
 }
