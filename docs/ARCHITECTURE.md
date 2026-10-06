@@ -14,7 +14,7 @@ print client
 
 ## Projects
 
-- `SstvVPrinter.IppProbe` implements the IPP message model, printer capabilities, endpoint, and optional raw capture sink. The desktop app reuses this server code without enabling file capture.
+- `SstvVPrinter.Ipp` implements the IPP message model, printer capabilities, endpoint, and optional raw capture sink. The desktop app reuses this library without enabling file capture.
 - `SstvVPrinter.Imaging` decodes the first PWG Raster page, normalizes printer orientation, performs manual quarter-turn rotation and detail-preserving fitting, and composes the SSTV frame/header.
 - `SstvVPrinter.Sstv` contains mode definitions, scan planning, VIS generation, PCM rendering, duration estimation, and WAV writing.
 - `SstvVPrinter.App` contains print jobs, queueing, preferences, validation, transmission preparation, and platform abstractions.

@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\SstvVPrinter.IppProbe\SstvVPrinter.IppProbe.csproj" />
+    <ProjectReference Include="..\..\src\SstvVPrinter.Ipp\SstvVPrinter.Ipp.csproj" />
   </ItemGroup>
 
   <ItemGroup>

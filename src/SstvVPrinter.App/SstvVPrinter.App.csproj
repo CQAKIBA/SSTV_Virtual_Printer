@@ -4,7 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\SstvVPrinter.Imaging\SstvVPrinter.Imaging.csproj" />
-    <ProjectReference Include="..\SstvVPrinter.IppProbe\SstvVPrinter.IppProbe.csproj" />
+    <ProjectReference Include="..\SstvVPrinter.Ipp\SstvVPrinter.Ipp.csproj" />
     <ProjectReference Include="..\SstvVPrinter.Sstv\SstvVPrinter.Sstv.csproj" />
   </ItemGroup>
 </Project>

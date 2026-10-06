@@ -4,6 +4,7 @@
     <Project Path="src/SstvVPrinter.Desktop/SstvVPrinter.Desktop.csproj" />
     <Project Path="src/SstvVPrinter.Imaging/SstvVPrinter.Imaging.csproj" />
     <Project Path="src/SstvVPrinter.ImagingTool/SstvVPrinter.ImagingTool.csproj" />
+    <Project Path="src/SstvVPrinter.Ipp/SstvVPrinter.Ipp.csproj" />
     <Project Path="src/SstvVPrinter.IppProbe/SstvVPrinter.IppProbe.csproj" />
     <Project Path="src/SstvVPrinter.Sstv/SstvVPrinter.Sstv.csproj" />
     <Project Path="src/SstvVPrinter.SstvTool/SstvVPrinter.SstvTool.csproj" />
