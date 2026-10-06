@@ -205,12 +205,13 @@ public sealed class DesktopComposition : IAsyncDisposable
             {
                 Queue.Select(selected.Id);
             }
-            if (args.PropertyName is nameof(MainWindowViewModel.CallSign)
-                or nameof(MainWindowViewModel.SelectedMode)
-                or nameof(MainWindowViewModel.IsDoubleHorizontal)
-                or nameof(MainWindowViewModel.SelectedAudioEndpoint))
+            if (args.PropertyName == nameof(MainWindowViewModel.SelectedAudioEndpoint))
             {
-                if (args.PropertyName == nameof(MainWindowViewModel.SelectedAudioEndpoint)) ApplyEndpointState(ViewModel);
+                ApplyEndpointState(ViewModel);
+                QueuePreferenceSave();
+            }
+            else if (PreviewRegenerationPolicy.RequiresRegeneration(args.PropertyName))
+            {
                 QueuePreferenceSave();
                 if (Queue.Selected is { } jobToPrepare && _transmission.State is not (JobState.Encoding or JobState.Transmitting))
                 {

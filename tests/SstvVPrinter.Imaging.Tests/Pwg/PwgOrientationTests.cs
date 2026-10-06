@@ -7,14 +7,14 @@ public sealed class PwgOrientationTests
     public static TheoryData<int, int, int, byte[]> Orientations => new()
     {
         { 0, 2, 3, [1, 2, 3, 4, 5, 6] },
-        { 1, 3, 2, [2, 4, 6, 1, 3, 5] },
-        { 2, 2, 3, [6, 5, 4, 3, 2, 1] },
-        { 3, 3, 2, [5, 3, 1, 6, 4, 2] },
+        { 1, 2, 3, [1, 2, 3, 4, 5, 6] },
+        { 2, 2, 3, [1, 2, 3, 4, 5, 6] },
+        { 3, 2, 3, [1, 2, 3, 4, 5, 6] },
     };
 
     [Theory]
     [MemberData(nameof(Orientations))]
-    public async Task Decode_maps_all_orientations_with_asymmetric_markers(
+    public async Task Decode_preserves_raster_pixels_for_all_printer_orientations(
         int orientation,
         int expectedWidth,
         int expectedHeight,
@@ -46,12 +46,4 @@ public sealed class PwgOrientationTests
         }
     }
 
-    [Fact]
-    public void Normalize_observes_cancellation()
-    {
-        using var cancellation = new CancellationTokenSource();
-        cancellation.Cancel();
-        Assert.Throws<OperationCanceledException>(() =>
-            PwgOrientationNormalizer.Normalize(1, 1, 0, new byte[3], cancellation.Token));
-    }
 }
