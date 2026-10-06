@@ -65,6 +65,7 @@ jobs:
           $rid = '${{ matrix.rid }}'
           $suffix = if ($rid -eq 'win-arm64') { '-experimental' } else { '' }
           $name = "SSTV-Virtual-Printer-$tag-$rid$suffix.zip"
+          Copy-Item -LiteralPath LICENSE,README.md,README_JP.md -Destination "artifacts/publish/$rid"
           Get-ChildItem -LiteralPath "artifacts/publish/$rid" -Filter '*.pdb' -File |
             Remove-Item -Force
           Compress-Archive -Path "artifacts/publish/$rid/*" -DestinationPath "artifacts/$name"
