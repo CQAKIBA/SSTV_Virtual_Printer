@@ -1,5 +1,6 @@
 using SstvVPrinter.App.Jobs;
 using SstvVPrinter.Imaging.Composition;
+using SstvVPrinter.Imaging.Transform;
 using SstvVPrinter.Sstv;
 
 namespace SstvVPrinter.App.Transmission;
@@ -31,7 +32,8 @@ public sealed class TransmissionPreparationService(SstvFrameComposer composer)
                 settings.HorizontalSampleMultiplier,
                 settings.CallSign,
                 headerTime);
-            var frame = composer.Compose(job.Page, request, cancellationToken);
+            var page = PageRotator.Rotate(job.Page, settings.RotationDegrees, cancellationToken);
+            var frame = composer.Compose(page, request, cancellationToken);
             var options = new SstvEncodeOptions(settings.Mode, settings.HorizontalSampleMultiplier);
             return new PreparedTransmission(
                 frame,

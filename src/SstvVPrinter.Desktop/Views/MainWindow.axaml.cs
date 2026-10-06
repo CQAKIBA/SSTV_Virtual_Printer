@@ -77,6 +77,10 @@ public sealed partial class MainWindow : Window
 
     private void OnDiscardClick(object? sender, RoutedEventArgs args) => DiscardRequested?.Invoke();
     private void OnStopClick(object? sender, RoutedEventArgs args) => StopRequested?.Invoke();
+    private void OnRotateClockwiseClick(object? sender, RoutedEventArgs args) =>
+        (DataContext as MainWindowViewModel)?.RotateClockwise();
+    private void OnRotateCounterclockwiseClick(object? sender, RoutedEventArgs args) =>
+        (DataContext as MainWindowViewModel)?.RotateCounterclockwise();
     private async void OnStartupClick(object? sender, RoutedEventArgs args)
     {
         if (sender is MenuItem item && StartupChanged is not null) await StartupChanged(item.IsChecked);

@@ -58,4 +58,18 @@ public sealed class MainWindowLayoutTests
 
         Assert.Equal("Wrap", warning.Attribute("TextWrapping")?.Value);
     }
+
+    [Fact]
+    public void Protocol_panel_contains_rotation_controls()
+    {
+        var path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "SstvVPrinter.Desktop", "Views", "MainWindow.axaml"));
+        var document = XDocument.Load(path);
+
+        var clockwise = document.Descendants().Single(element => element.Attribute("Name")?.Value == "RotateClockwiseButton");
+        var counterclockwise = document.Descendants().Single(element => element.Attribute("Name")?.Value == "RotateCounterclockwiseButton");
+
+        Assert.Equal("OnRotateClockwiseClick", clockwise.Attribute("Click")?.Value);
+        Assert.Equal("OnRotateCounterclockwiseClick", counterclockwise.Attribute("Click")?.Value);
+        Assert.Contains(document.Descendants(), element => element.Attribute("Text")?.Value == "{Binding RotationText}");
+    }
 }

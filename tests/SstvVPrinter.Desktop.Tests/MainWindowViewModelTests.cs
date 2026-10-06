@@ -10,6 +10,21 @@ namespace SstvVPrinter.Desktop.Tests;
 public sealed class MainWindowViewModelTests
 {
     [Fact]
+    public void Rotation_buttons_cycle_through_canonical_angles()
+    {
+        var viewModel = new MainWindowViewModel(new ControlledPreparationService());
+
+        viewModel.RotateCounterclockwise();
+        Assert.Equal(270, viewModel.RotationDegrees);
+        Assert.Equal("270°", viewModel.RotationText);
+
+        viewModel.RotateClockwise();
+        Assert.Equal(0, viewModel.RotationDegrees);
+        viewModel.RotateClockwise();
+        Assert.Equal(90, viewModel.RotationDegrees);
+    }
+
+    [Fact]
     public async Task Invalid_call_sign_never_becomes_ready()
     {
         var service = new ControlledPreparationService();

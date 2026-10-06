@@ -20,6 +20,7 @@ public sealed class UserPreferencesTests : IDisposable
         Assert.Equal(1, result.HorizontalSampleMultiplier);
         Assert.Null(result.AudioEndpointId);
         Assert.True(result.StartAtSignIn);
+        Assert.Equal(0, result.RotationDegrees);
     }
 
     [Fact]
@@ -35,10 +36,25 @@ public sealed class UserPreferencesTests : IDisposable
     }
 
     [Fact]
+    public async Task Settings_saved_before_rotation_support_load_as_zero_degrees()
+    {
+        var settingsDirectory = Path.Combine(_directory, "SstvVPrinter");
+        Directory.CreateDirectory(settingsDirectory);
+        await File.WriteAllTextAsync(
+            Path.Combine(settingsDirectory, "settings.json"),
+            """{"CallSign":"JA1UMW","Mode":2,"HorizontalSampleMultiplier":1,"AudioEndpointId":null,"StartAtSignIn":true}""");
+
+        var result = await new JsonUserPreferencesStore(_directory).LoadAsync();
+
+        Assert.Equal("JA1UMW", result.CallSign);
+        Assert.Equal(0, result.RotationDegrees);
+    }
+
+    [Fact]
     public async Task Save_is_atomic_and_round_trips_only_preferences()
     {
         var store = new JsonUserPreferencesStore(_directory);
-        var expected = new UserPreferences("JA1UMW", SstvMode.Robot36, 2, "endpoint-7", false);
+        var expected = new UserPreferences("JA1UMW", SstvMode.Robot36, 2, "endpoint-7", false, 270);
 
         await store.SaveAsync(expected);
         var actual = await store.LoadAsync();
@@ -47,7 +63,7 @@ public sealed class UserPreferencesTests : IDisposable
         var settingsDirectory = Path.Combine(_directory, "SstvVPrinter");
         Assert.Empty(Directory.EnumerateFiles(settingsDirectory, "*.tmp"));
         using var document = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(settingsDirectory, "settings.json")));
-        Assert.Equal(5, document.RootElement.EnumerateObject().Count());
+        Assert.Equal(6, document.RootElement.EnumerateObject().Count());
         Assert.False(document.RootElement.TryGetProperty("Page", out _));
         Assert.False(document.RootElement.TryGetProperty("Jobs", out _));
     }
@@ -58,6 +74,13 @@ public sealed class UserPreferencesTests : IDisposable
     public void Preferences_reject_invalid_multiplier(int multiplier) =>
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             new UserPreferences("JA1UMW", SstvMode.Scottie2, multiplier, null, true));
+
+    [Theory]
+    [InlineData(-90)]
+    [InlineData(360)]
+    public void Preferences_reject_non_normalized_rotation(int rotationDegrees) =>
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new UserPreferences("JA1UMW", SstvMode.Scottie2, 1, null, true, rotationDegrees));
 
     public void Dispose()
     {

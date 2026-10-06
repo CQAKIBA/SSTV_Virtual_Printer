@@ -39,6 +39,19 @@ public sealed class TransmissionPreparationServiceTests
         Assert.Equal(new DateTimeOffset(2026, 10, 5, 9, 0, 0, TimeSpan.FromHours(9)), result.HeaderTime);
     }
 
+    [Fact]
+    public async Task Prepare_rotates_source_before_fitting_it_to_the_sstv_canvas()
+    {
+        var service = new TransmissionPreparationService(new SstvFrameComposer());
+
+        var result = await service.PrepareAsync(
+            CreateJob(), new TransmissionSettings("JA1UMW", SstvMode.Scottie2, 1, 90),
+            CancellationToken.None);
+
+        Assert.Equal(new Rgb24(0, 0, 0), result.Frame.GetPixel(0, 128));
+        Assert.NotEqual(new Rgb24(0, 0, 0), result.Frame.GetPixel(160, 128));
+    }
+
     private static PrintJob CreateJob(DateTimeOffset? acceptedAt = null) =>
         new(
             Guid.NewGuid(),

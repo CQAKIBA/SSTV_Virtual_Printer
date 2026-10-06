@@ -33,6 +33,9 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
     private bool _isDoubleHorizontal;
 
     [ObservableProperty]
+    private int _rotationDegrees;
+
+    [ObservableProperty]
     private IReadOnlyList<AudioEndpointInfo> _audioEndpoints = [];
 
     [ObservableProperty]
@@ -97,6 +100,10 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
     public bool CanSend => IsReady && IsSelectedJobActive && !IsSettingsLocked && SelectedAudioEndpoint?.IsAvailable is true;
     public bool CanSaveWave => IsReady && IsSelectedJobActive && !IsSettingsLocked;
     public bool CanDiscard => Preview is not null && !IsSettingsLocked;
+    public string RotationText => $"{RotationDegrees}°";
+
+    public void RotateClockwise() => RotationDegrees = (RotationDegrees + 90) % 360;
+    public void RotateCounterclockwise() => RotationDegrees = (RotationDegrees + 270) % 360;
 
     public async Task UpdatePreviewAsync(PrintJob job, TransmissionSettings settings)
     {
@@ -193,6 +200,7 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
     }
 
     partial void OnPreviewBitmapChanged(Bitmap? value) => OnPropertyChanged(nameof(IsPreviewEmpty));
+    partial void OnRotationDegreesChanged(int value) => OnPropertyChanged(nameof(RotationText));
     partial void OnSelectedAudioEndpointChanged(AudioEndpointInfo? value)
     {
         RefreshAudioDisplay();

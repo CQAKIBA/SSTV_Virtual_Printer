@@ -8,6 +8,7 @@ public sealed class PreviewRegenerationPolicyTests
     [Theory]
     [InlineData(nameof(MainWindowViewModel.SelectedMode))]
     [InlineData(nameof(MainWindowViewModel.IsDoubleHorizontal))]
+    [InlineData(nameof(MainWindowViewModel.RotationDegrees))]
     public void Image_affecting_preferences_require_regeneration(string propertyName)
     {
         Assert.True(PreviewRegenerationPolicy.RequiresRegeneration(propertyName));
