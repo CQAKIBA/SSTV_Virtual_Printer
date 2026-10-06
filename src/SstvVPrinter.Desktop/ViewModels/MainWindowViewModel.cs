@@ -217,11 +217,11 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
             : endpoint?.AppVolumePercent is { } app ? $"{Math.Round(app):0}%" : "検出中";
         AppVolumePercent = IsAppVolumeActive ? endpoint?.AppVolumePercent ?? 0 : 0;
         MuteWarning = endpoint?.IsMuted is true
-            ? "MUTED / マスター音量ミュート中"
+            ? "MASTER MUTED"
             : IsAppVolumeActive && endpoint?.AppIsMuted is true
-                ? "APP MUTED / アプリ音量ミュート中"
+                ? "APP MUTED"
                 : IsAppVolumeActive && endpoint?.AppVolumePercent is <= 5
-                    ? "APP VOLUME LOW / アプリ音量が低すぎます"
+                    ? "APP VOLUME LOW"
                     : null;
         DeviceError = endpoint is null ? "使用可能な音声出力デバイスがありません。" : null;
     }

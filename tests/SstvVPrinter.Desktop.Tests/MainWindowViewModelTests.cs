@@ -198,7 +198,24 @@ public sealed class MainWindowViewModelTests
         Assert.Null(viewModel.MuteWarning);
 
         viewModel.ApplyTransmissionState(JobState.Transmitting, 0, null);
-        Assert.Equal("APP MUTED / アプリ音量ミュート中", viewModel.MuteWarning);
+        Assert.Equal("APP MUTED", viewModel.MuteWarning);
+    }
+
+    [Fact]
+    public void Low_application_volume_uses_compact_english_warning()
+    {
+        var viewModel = new MainWindowViewModel(new ControlledPreparationService())
+        {
+            SelectedAudioEndpoint = new AudioEndpointInfo("test", "Test", true, 80, false)
+            {
+                AppVolumePercent = 5,
+                AppIsMuted = false,
+            },
+        };
+
+        viewModel.ApplyTransmissionState(JobState.Transmitting, 0, null);
+
+        Assert.Equal("APP VOLUME LOW", viewModel.MuteWarning);
     }
 
     private static PrintJob CreateJob() =>

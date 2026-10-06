@@ -47,4 +47,15 @@ public sealed class MainWindowLayoutTests
         Assert.Contains("Master volume", automationNames);
         Assert.Contains("Application volume", automationNames);
     }
+
+    [Fact]
+    public void Audio_warning_wraps_inside_the_actions_panel()
+    {
+        var path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "SstvVPrinter.Desktop", "Views", "MainWindow.axaml"));
+        var document = XDocument.Load(path);
+        var warning = document.Descendants().Single(element =>
+            element.Name.LocalName == "TextBlock" && element.Attribute("Text")?.Value == "{Binding MuteWarning}");
+
+        Assert.Equal("Wrap", warning.Attribute("TextWrapping")?.Value);
+    }
 }

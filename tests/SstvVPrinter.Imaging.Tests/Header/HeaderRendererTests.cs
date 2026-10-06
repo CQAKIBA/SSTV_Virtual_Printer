@@ -18,7 +18,7 @@ public sealed class HeaderRendererTests
 
         Assert.Equal($"2026-10-03 09:34 JST {label}", layout.MetadataText);
         Assert.Equal("JA1UMW", layout.CallSign);
-        Assert.Equal(320 - 2 - (6 * 6), layout.CallSignX);
+        Assert.Equal(320 - 2 - (6 * 11), layout.CallSignX);
     }
 
     [Theory]
@@ -47,17 +47,32 @@ public sealed class HeaderRendererTests
     }
 
     [Fact]
+    public void Draw_renders_callsign_dots_at_double_horizontal_width()
+    {
+        const int width = 320;
+        var pixels = Enumerable.Repeat((byte)255, width * 16 * 3).ToArray();
+        var request = new CompositionRequest(SstvMode.Scottie2, 1, "U", DateTimeOffset.UnixEpoch);
+        var layout = HeaderRenderer.MeasureAndSelect(request, width);
+
+        HeaderRenderer.Draw(pixels, width, 16, layout);
+
+        AssertPixel(pixels, width, layout.CallSignX, 1, 0, 0, 0);
+        AssertPixel(pixels, width, layout.CallSignX + 1, 1, 0, 0, 0);
+        AssertPixel(pixels, width, layout.CallSignX + 2, 1, 255, 255, 255);
+    }
+
+    [Fact]
     public void Layout_falls_back_before_colliding_with_callsign()
     {
         var request = new CompositionRequest(
             SstvMode.Martin1, 1, "JA1UMW", new DateTimeOffset(2026, 10, 3, 0, 34, 0, TimeSpan.Zero));
 
-        Assert.Equal("2026-10-03 09:34 JST M1", HeaderRenderer.MeasureAndSelect(request, 232).MetadataText);
-        Assert.Equal("10-03 09:34 JST M1", HeaderRenderer.MeasureAndSelect(request, 231).MetadataText);
-        Assert.Equal("09:34 JST M1", HeaderRenderer.MeasureAndSelect(request, 201).MetadataText);
-        Assert.Equal("09:34 JST M1", HeaderRenderer.MeasureAndSelect(request, 166).MetadataText);
-        Assert.Equal("JST M1", HeaderRenderer.MeasureAndSelect(request, 165).MetadataText);
-        Assert.Throws<ArgumentException>(() => HeaderRenderer.MeasureAndSelect(request, 129));
+        Assert.Equal("2026-10-03 09:34 JST M1", HeaderRenderer.MeasureAndSelect(request, 262).MetadataText);
+        Assert.Equal("10-03 09:34 JST M1", HeaderRenderer.MeasureAndSelect(request, 261).MetadataText);
+        Assert.Equal("09:34 JST M1", HeaderRenderer.MeasureAndSelect(request, 231).MetadataText);
+        Assert.Equal("09:34 JST M1", HeaderRenderer.MeasureAndSelect(request, 196).MetadataText);
+        Assert.Equal("JST M1", HeaderRenderer.MeasureAndSelect(request, 195).MetadataText);
+        Assert.Throws<ArgumentException>(() => HeaderRenderer.MeasureAndSelect(request, 159));
     }
 
     [Fact]
@@ -73,9 +88,9 @@ public sealed class HeaderRendererTests
         Assert.Equal(one.PatchWidth * 2, two.PatchWidth);
 
         var constrained = new CompositionRequest(SstvMode.Martin1, 2, "JA1UMW", accepted);
-        Assert.Equal("2026-10-03 09:34 JST M1", HeaderRenderer.MeasureAndSelect(constrained, 464).MetadataText);
-        Assert.Equal("10-03 09:34 JST M1", HeaderRenderer.MeasureAndSelect(constrained, 462).MetadataText);
-        Assert.Throws<ArgumentException>(() => HeaderRenderer.MeasureAndSelect(constrained, 258));
+        Assert.Equal("2026-10-03 09:34 JST M1", HeaderRenderer.MeasureAndSelect(constrained, 524).MetadataText);
+        Assert.Equal("10-03 09:34 JST M1", HeaderRenderer.MeasureAndSelect(constrained, 522).MetadataText);
+        Assert.Throws<ArgumentException>(() => HeaderRenderer.MeasureAndSelect(constrained, 318));
     }
 
     private static void AssertPixel(byte[] pixels, int width, int x, int y, byte r, byte g, byte b)

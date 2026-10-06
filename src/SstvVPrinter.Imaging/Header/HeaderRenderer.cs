@@ -8,6 +8,8 @@ internal static class HeaderRenderer
 {
     private const int HeaderHeight = 16;
     private const int LogicalGlyphAdvance = 6;
+    private const int CallSignHorizontalStretch = 2;
+    private const int CallSignLogicalGlyphAdvance = 11;
 
     public static HeaderLayout MeasureAndSelect(CompositionRequest request, int canvasWidth)
     {
@@ -18,9 +20,10 @@ internal static class HeaderRenderer
         var patchWidth = 16 * scale;
         var metadataX = (3 * patchWidth) + (2 * scale);
         var advance = LogicalGlyphAdvance * scale;
+        var callSignAdvance = CallSignLogicalGlyphAdvance * scale;
         var rightMargin = 2 * scale;
         var separator = LogicalGlyphAdvance * scale;
-        var callSignWidth = request.CallSign.Length * advance;
+        var callSignWidth = request.CallSign.Length * callSignAdvance;
         var callSignX = canvasWidth - rightMargin - callSignWidth;
         var jst = request.AcceptedAt.ToOffset(TimeSpan.FromHours(9));
         var mode = ModeLabel(request.Mode);
@@ -54,11 +57,12 @@ internal static class HeaderRenderer
         FillRect(rgb24, width, 0, 0, layout.PatchWidth, HeaderHeight, 255, 0, 0);
         FillRect(rgb24, width, layout.PatchWidth, 0, layout.PatchWidth, HeaderHeight, 0, 255, 0);
         FillRect(rgb24, width, layout.PatchWidth * 2, 0, layout.PatchWidth, HeaderHeight, 0, 0, 255);
-        DrawText(rgb24, width, layout.MetadataX, layout.MetadataText, layout.HorizontalScale);
-        DrawText(rgb24, width, layout.CallSignX, layout.CallSign, layout.HorizontalScale);
+        DrawText(rgb24, width, layout.MetadataX, layout.MetadataText, layout.HorizontalScale, 1);
+        DrawText(rgb24, width, layout.CallSignX, layout.CallSign, layout.HorizontalScale, CallSignHorizontalStretch);
     }
 
-    private static void DrawText(Span<byte> pixels, int width, int startX, string text, int scale)
+    private static void DrawText(
+        Span<byte> pixels, int width, int startX, string text, int scale, int horizontalStretch)
     {
         var x = startX;
         foreach (var character in text)
@@ -72,10 +76,12 @@ internal static class HeaderRenderer
             for (var column = 0; column < 5; column++)
             {
                 if ((rows[row] & (1 << (4 - column))) == 0) continue;
-                FillRect(pixels, width, x + (column * scale), 1 + (row * 2), scale, 2, 0, 0, 0);
+                FillRect(
+                    pixels, width, x + (column * scale * horizontalStretch), 1 + (row * 2),
+                    scale * horizontalStretch, 2, 0, 0, 0);
             }
 
-            x += LogicalGlyphAdvance * scale;
+            x += ((5 * horizontalStretch) + 1) * scale;
         }
     }
 
