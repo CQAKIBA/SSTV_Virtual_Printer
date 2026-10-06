@@ -9,27 +9,42 @@ public class DetailPreservingResampler
         int targetWidth,
         int targetHeight,
         CancellationToken cancellationToken = default)
+        => Fit(source, targetWidth, targetHeight, 1, cancellationToken);
+
+    public virtual FittedImage Fit(
+        DecodedPage source,
+        int targetWidth,
+        int targetHeight,
+        int horizontalSampleMultiplier,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(targetWidth);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(targetHeight);
+        if (horizontalSampleMultiplier is not (1 or 2)
+            || targetWidth % horizontalSampleMultiplier != 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(horizontalSampleMultiplier));
+        }
 
-        var sourceIsWider = checked((long)source.Width * targetHeight) >= checked((long)source.Height * targetWidth);
+        var logicalTargetWidth = targetWidth / horizontalSampleMultiplier;
+        var sourceIsWider = checked((long)source.Width * targetHeight) >= checked((long)source.Height * logicalTargetWidth);
         int fittedWidth;
         int fittedHeight;
         if (sourceIsWider)
         {
             fittedWidth = targetWidth;
             fittedHeight = Math.Max(1, (int)Math.Round(
-                (double)targetWidth * source.Height / source.Width,
+                (double)logicalTargetWidth * source.Height / source.Width,
                 MidpointRounding.AwayFromZero));
         }
         else
         {
             fittedHeight = targetHeight;
-            fittedWidth = Math.Max(1, (int)Math.Round(
+            var logicalFittedWidth = Math.Max(1, (int)Math.Round(
                 (double)targetHeight * source.Width / source.Height,
                 MidpointRounding.AwayFromZero));
+            fittedWidth = checked(logicalFittedWidth * horizontalSampleMultiplier);
         }
 
         fittedWidth = Math.Min(fittedWidth, targetWidth);

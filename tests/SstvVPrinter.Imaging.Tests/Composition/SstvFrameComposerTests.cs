@@ -13,7 +13,7 @@ public sealed class SstvFrameComposerTests
     [InlineData(SstvMode.Scottie2, 1, 320)]
     public void Compose_sequential_modes_reserve_exact_header_and_content(SstvMode mode, int multiplier, int width)
     {
-        var page = SolidPage(width, 240, new(21, 43, 65));
+        var page = SolidPage(width / multiplier, 240, new(21, 43, 65));
         var request = new CompositionRequest(mode, multiplier, "JA1UMW", DateTimeOffset.UnixEpoch);
         var frame = new SstvFrameComposer().Compose(page, request);
 
@@ -37,6 +37,19 @@ public sealed class SstvFrameComposerTests
     }
 
     [Fact]
+    public void Double_horizontal_mode_preserves_display_aspect_while_using_all_samples()
+    {
+        var color = new Rgb24(70, 80, 90);
+        var frame = new SstvFrameComposer().Compose(
+            SolidPage(320, 240, color),
+            new(SstvMode.Scottie2, 2, "JA1UMW", DateTimeOffset.UnixEpoch));
+
+        Assert.Equal(640, frame.Width);
+        Assert.Equal(color, frame.GetPixel(0, 16));
+        Assert.Equal(color, frame.GetPixel(639, 255));
+    }
+
+    [Fact]
     public void Compose_validates_header_before_resampling()
     {
         var spy = new SpyResampler();
@@ -52,9 +65,9 @@ public sealed class SstvFrameComposerTests
     public void Robot36_uses_padding_only_when_top_gap_is_at_least_sixteen(int multiplier, int width)
     {
         var composer = new SstvFrameComposer();
-        var padded = composer.Compose(SolidPage(width, 208, new(11, 21, 31)),
+        var padded = composer.Compose(SolidPage(width / multiplier, 208, new(11, 21, 31)),
             new(SstvMode.Robot36, multiplier, "JA1UMW", DateTimeOffset.UnixEpoch));
-        var overlaid = composer.Compose(SolidPage(width, 210, new(11, 21, 31)),
+        var overlaid = composer.Compose(SolidPage(width / multiplier, 210, new(11, 21, 31)),
             new(SstvMode.Robot36, multiplier, "JA1UMW", DateTimeOffset.UnixEpoch));
 
         Assert.Equal(width, padded.Width);

@@ -34,19 +34,20 @@ public sealed class SstvFrameComposer
         var layout = HeaderRenderer.MeasureAndSelect(request, canvasWidth);
 
         return request.Mode == SstvMode.Robot36
-            ? ComposeRobot(page, canvasWidth, canvasHeight, layout, cancellationToken)
-            : ComposeSequential(page, canvasWidth, canvasHeight, layout, cancellationToken);
+            ? ComposeRobot(page, canvasWidth, canvasHeight, request.HorizontalSampleMultiplier, layout, cancellationToken)
+            : ComposeSequential(page, canvasWidth, canvasHeight, request.HorizontalSampleMultiplier, layout, cancellationToken);
     }
 
     private RgbFrame ComposeSequential(
         DecodedPage page,
         int width,
         int height,
+        int horizontalSampleMultiplier,
         HeaderLayout layout,
         CancellationToken cancellationToken)
     {
         var contentHeight = height - HeaderHeight;
-        var fitted = _resampler.Fit(page, width, contentHeight, cancellationToken);
+        var fitted = _resampler.Fit(page, width, contentHeight, horizontalSampleMultiplier, cancellationToken);
         var canvas = new byte[checked(width * height * 3)];
         fitted.Pixels.CopyTo(canvas.AsSpan(width * HeaderHeight * 3));
         canvas.AsSpan(0, width * HeaderHeight * 3).Fill(255);
@@ -58,10 +59,11 @@ public sealed class SstvFrameComposer
         DecodedPage page,
         int width,
         int height,
+        int horizontalSampleMultiplier,
         HeaderLayout layout,
         CancellationToken cancellationToken)
     {
-        var fitted = _resampler.Fit(page, width, height, cancellationToken);
+        var fitted = _resampler.Fit(page, width, height, horizontalSampleMultiplier, cancellationToken);
         var canvas = fitted.Pixels.ToArray();
         var headerByteCount = width * HeaderHeight * 3;
         if (fitted.ContentBounds.Y >= HeaderHeight)
