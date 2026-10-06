@@ -18,8 +18,11 @@ public sealed class WindowsUserAttentionService(Func<nint> windowHandle, Action<
     {
         var info = new FlashWindowInfo
         {
-            Size = (uint)Marshal.SizeOf<FlashWindowInfo>(), Window = windowHandle(),
-            Flags = 3, Count = 3, Timeout = 0,
+            Size = (uint)Marshal.SizeOf<FlashWindowInfo>(),
+            Window = windowHandle(),
+            Flags = 3,
+            Count = 3,
+            Timeout = 0,
         };
         if (info.Window != 0) FlashWindowEx(ref info);
     }

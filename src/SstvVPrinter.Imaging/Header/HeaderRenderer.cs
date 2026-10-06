@@ -77,13 +77,13 @@ internal static class HeaderRenderer
             }
 
             for (var row = 0; row < 7; row++)
-            for (var column = 0; column < 5; column++)
-            {
-                if ((rows[row] & (1 << (4 - column))) == 0) continue;
-                FillRect(
-                    pixels, width, x + (column * scale * horizontalStretch), 1 + (row * 2),
-                    scale * horizontalStretch, 2, 0, 0, 0);
-            }
+                for (var column = 0; column < 5; column++)
+                {
+                    if ((rows[row] & (1 << (4 - column))) == 0) continue;
+                    FillRect(
+                        pixels, width, x + (column * scale * horizontalStretch), 1 + (row * 2),
+                        scale * horizontalStretch, 2, 0, 0, 0);
+                }
 
             x += ((5 * horizontalStretch) + logicalGlyphGap) * scale;
         }
@@ -94,13 +94,13 @@ internal static class HeaderRenderer
         byte red, byte green, byte blue)
     {
         for (var row = y; row < y + height; row++)
-        for (var column = x; column < x + width; column++)
-        {
-            var offset = ((row * canvasWidth) + column) * 3;
-            pixels[offset] = red;
-            pixels[offset + 1] = green;
-            pixels[offset + 2] = blue;
-        }
+            for (var column = x; column < x + width; column++)
+            {
+                var offset = ((row * canvasWidth) + column) * 3;
+                pixels[offset] = red;
+                pixels[offset + 1] = green;
+                pixels[offset + 2] = blue;
+            }
     }
 
     private static string ModeLabel(SstvMode mode) => mode switch

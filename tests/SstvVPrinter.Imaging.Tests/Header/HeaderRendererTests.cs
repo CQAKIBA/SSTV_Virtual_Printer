@@ -39,8 +39,8 @@ public sealed class HeaderRendererTests
         AssertPixel(pixels, width, 32 * scale, 0, 0, 0, 255);
         var textRegionContainsBlack = false;
         for (var y = 1; y < 15; y++)
-        for (var x = layout.MetadataX; x < layout.CallSignX; x++)
-            textRegionContainsBlack |= pixels[((y * width) + x) * 3] == 0;
+            for (var x = layout.MetadataX; x < layout.CallSignX; x++)
+                textRegionContainsBlack |= pixels[((y * width) + x) * 3] == 0;
         Assert.True(textRegionContainsBlack);
         AssertPixel(pixels, width, layout.MetadataX, 0, 255, 255, 255);
         AssertPixel(pixels, width, layout.MetadataX, 15, 255, 255, 255);

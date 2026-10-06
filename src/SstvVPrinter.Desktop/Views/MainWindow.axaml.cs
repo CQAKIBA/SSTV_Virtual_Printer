@@ -116,7 +116,8 @@ public sealed partial class MainWindow : Window
         no.Click += (_, _) => dialog.Close();
         dialog.Content = new StackPanel
         {
-            Margin = new Avalonia.Thickness(20), Spacing = 18,
+            Margin = new Avalonia.Thickness(20),
+            Spacing = 18,
             Children =
             {
                 new TextBlock { Text = "待機中の印刷ジョブは終了時に破棄されます。" },

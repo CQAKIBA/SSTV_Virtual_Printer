@@ -50,8 +50,8 @@ public sealed class DetailPreservingResamplerTests
         var second = new DetailPreservingResampler().Fit(source, 11, 8);
 
         for (var y = 0; y < 8; y++)
-        for (var x = 0; x < 11; x++)
-            Assert.Equal(first.GetPixel(x, y), second.GetPixel(x, y));
+            for (var x = 0; x < 11; x++)
+                Assert.Equal(first.GetPixel(x, y), second.GetPixel(x, y));
     }
 
     [Fact]

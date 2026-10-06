@@ -203,11 +203,11 @@ public class DetailPreservingResampler
                 var sum = 0.0;
                 var count = 0;
                 for (var neighborY = Math.Max(0, y - 1); neighborY <= Math.Min(height - 1, y + 1); neighborY++)
-                for (var neighborX = Math.Max(0, x - 1); neighborX <= Math.Min(width - 1, x + 1); neighborX++)
-                {
-                    sum += Luminance(ReadLinear(input, width, neighborX, neighborY));
-                    count++;
-                }
+                    for (var neighborX = Math.Max(0, x - 1); neighborX <= Math.Min(width - 1, x + 1); neighborX++)
+                    {
+                        sum += Luminance(ReadLinear(input, width, neighborX, neighborY));
+                        count++;
+                    }
 
                 var difference = centerLuminance - (sum / count);
                 var delta = Math.Abs(difference) < (4.0 / 255.0)

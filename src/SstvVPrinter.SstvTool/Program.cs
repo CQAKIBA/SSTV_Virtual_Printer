@@ -49,8 +49,10 @@ internal static class Program
         }
         var mode = modeText switch
         {
-            "martin1" => SstvMode.Martin1, "scottie1" => SstvMode.Scottie1,
-            "scottie2" => SstvMode.Scottie2, "robot36" => SstvMode.Robot36,
+            "martin1" => SstvMode.Martin1,
+            "scottie1" => SstvMode.Scottie1,
+            "scottie2" => SstvMode.Scottie2,
+            "robot36" => SstvMode.Robot36,
             _ => throw Usage(),
         };
         if (!int.TryParse(horizontalText, out var horizontal) || horizontal is not (1 or 2)) throw Usage();
