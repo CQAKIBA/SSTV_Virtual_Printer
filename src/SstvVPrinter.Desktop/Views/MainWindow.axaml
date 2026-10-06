@@ -12,12 +12,12 @@
     x:CompileBindings="False">
   <Grid Name="RootLayout" RowDefinitions="Auto,*">
     <Menu Grid.Row="0" Background="#171E28">
-      <MenuItem Header="アプリ">
+      <MenuItem Header="ファイル(_F)">
         <MenuItem Header="起動時に自動実行" ToggleType="CheckBox" IsChecked="{Binding StartAtSignIn}" Click="OnStartupClick" />
         <Separator />
         <MenuItem Header="終了" Click="OnExitClick" />
       </MenuItem>
-      <MenuItem Header="プリンタ">
+      <MenuItem Header="プリンタ(_P)">
         <MenuItem Header="状態を確認" Click="OnVerifyPrinterClick" />
         <MenuItem Header="登録" Click="OnRegisterPrinterClick" />
         <MenuItem Header="修復" Click="OnRepairPrinterClick" />
