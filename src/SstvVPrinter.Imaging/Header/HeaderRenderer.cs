@@ -9,7 +9,8 @@ internal static class HeaderRenderer
     private const int HeaderHeight = 16;
     private const int LogicalGlyphAdvance = 6;
     private const int CallSignHorizontalStretch = 2;
-    private const int CallSignLogicalGlyphAdvance = 11;
+    private const int CallSignLogicalGlyphGap = 2;
+    private const int CallSignLogicalGlyphAdvance = 12;
 
     public static HeaderLayout MeasureAndSelect(CompositionRequest request, int canvasWidth)
     {
@@ -57,12 +58,15 @@ internal static class HeaderRenderer
         FillRect(rgb24, width, 0, 0, layout.PatchWidth, HeaderHeight, 255, 0, 0);
         FillRect(rgb24, width, layout.PatchWidth, 0, layout.PatchWidth, HeaderHeight, 0, 255, 0);
         FillRect(rgb24, width, layout.PatchWidth * 2, 0, layout.PatchWidth, HeaderHeight, 0, 0, 255);
-        DrawText(rgb24, width, layout.MetadataX, layout.MetadataText, layout.HorizontalScale, 1);
-        DrawText(rgb24, width, layout.CallSignX, layout.CallSign, layout.HorizontalScale, CallSignHorizontalStretch);
+        DrawText(rgb24, width, layout.MetadataX, layout.MetadataText, layout.HorizontalScale, 1, 1);
+        DrawText(
+            rgb24, width, layout.CallSignX, layout.CallSign, layout.HorizontalScale,
+            CallSignHorizontalStretch, CallSignLogicalGlyphGap);
     }
 
     private static void DrawText(
-        Span<byte> pixels, int width, int startX, string text, int scale, int horizontalStretch)
+        Span<byte> pixels, int width, int startX, string text, int scale,
+        int horizontalStretch, int logicalGlyphGap)
     {
         var x = startX;
         foreach (var character in text)
@@ -81,7 +85,7 @@ internal static class HeaderRenderer
                     scale * horizontalStretch, 2, 0, 0, 0);
             }
 
-            x += ((5 * horizontalStretch) + 1) * scale;
+            x += ((5 * horizontalStretch) + logicalGlyphGap) * scale;
         }
     }
 
