@@ -9,8 +9,8 @@ public sealed class WindowsPrinterRegistrationService : IPrinterRegistrationServ
     private readonly IProcessRunner _runner;
     private readonly TimeSpan _operationTimeout;
     private const string VerifyScript = "param($name) if (Get-Printer -Name $name -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }";
-    private const string AddScript = "param($name,$uri) Write-Host 'SSTV仮想プリンタを登録しています...'; Write-Host ('接続先: ' + $uri); $code=0; try { Add-Printer -Name $name -IppURL $uri -ErrorAction Stop; Write-Host '登録が完了しました。' -ForegroundColor Green } catch { Write-Host ('登録に失敗しました: ' + $_.Exception.Message) -ForegroundColor Red; $code=1 }; Start-Sleep -Seconds 2; exit $code";
-    private const string RepairScript = "param($name,$uri) Write-Host 'SSTV仮想プリンタを修復しています...'; $code=0; try { Remove-Printer -Name $name -ErrorAction SilentlyContinue; Write-Host '再登録しています...'; Add-Printer -Name $name -IppURL $uri -ErrorAction Stop; Write-Host '修復が完了しました。' -ForegroundColor Green } catch { Write-Host ('修復に失敗しました: ' + $_.Exception.Message) -ForegroundColor Red; $code=1 }; Start-Sleep -Seconds 2; exit $code";
+    private const string AddScript = "param($name,$uri,$resultPath) Write-Host 'SSTV仮想プリンタを登録しています...'; Write-Host ('接続先: ' + $uri); $code=0; try { Add-Printer -Name $name -IppURL $uri -ErrorAction Stop; Write-Host '登録が完了しました。' -ForegroundColor Green } catch { $detail=$_.Exception.ToString(); Write-Host ('登録に失敗しました: ' + $detail) -ForegroundColor Red; Set-Content -LiteralPath $resultPath -Value $detail -Encoding UTF8; $code=1 }; Start-Sleep -Seconds 3; exit $code";
+    private const string RepairScript = "param($name,$uri,$resultPath) Write-Host 'SSTV仮想プリンタを修復しています...'; $code=0; try { Remove-Printer -Name $name -ErrorAction SilentlyContinue; Write-Host '再登録しています...'; Add-Printer -Name $name -IppURL $uri -ErrorAction Stop; Write-Host '修復が完了しました。' -ForegroundColor Green } catch { $detail=$_.Exception.ToString(); Write-Host ('修復に失敗しました: ' + $detail) -ForegroundColor Red; Set-Content -LiteralPath $resultPath -Value $detail -Encoding UTF8; $code=1 }; Start-Sleep -Seconds 3; exit $code";
 
     public WindowsPrinterRegistrationService(IProcessRunner runner, TimeSpan? operationTimeout = null)
     {
@@ -23,12 +23,38 @@ public sealed class WindowsPrinterRegistrationService : IPrinterRegistrationServ
 
     public async Task RegisterAsync(CancellationToken cancellationToken)
     {
-        EnsureSuccess(await RunAsync(AddScript, [ProbePrinter.DisplayName, ProbePrinter.DefaultPrinterUri], true, true, cancellationToken));
+        await RunAdministrativeAsync(AddScript, cancellationToken);
     }
 
     public async Task RepairAsync(CancellationToken cancellationToken)
     {
-        EnsureSuccess(await RunAsync(RepairScript, [ProbePrinter.DisplayName, ProbePrinter.DefaultPrinterUri], true, true, cancellationToken));
+        await RunAdministrativeAsync(RepairScript, cancellationToken);
+    }
+
+    private async Task RunAdministrativeAsync(string script, CancellationToken cancellationToken)
+    {
+        var resultPath = Path.Combine(Path.GetTempPath(), $"SstvVPrinter-printer-{Guid.NewGuid():N}.txt");
+        try
+        {
+            var result = await RunAsync(
+                script,
+                [ProbePrinter.DisplayName, ProbePrinter.DefaultPrinterUri, resultPath],
+                true,
+                true,
+                cancellationToken);
+            if (result.ExitCode == 0) return;
+
+            var detail = File.Exists(resultPath)
+                ? await File.ReadAllTextAsync(resultPath, cancellationToken)
+                : result.StandardError;
+            EnsureSuccess(new ProcessResult(result.ExitCode, result.StandardOutput, detail));
+        }
+        finally
+        {
+            try { File.Delete(resultPath); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
     }
 
     private async Task<ProcessResult> RunAsync(

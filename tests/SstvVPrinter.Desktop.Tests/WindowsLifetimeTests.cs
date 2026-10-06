@@ -75,6 +75,20 @@ public sealed class WindowsLifetimeTests
     }
 
     [Fact]
+    public async Task Printer_registration_surfaces_the_elevated_powershell_error_and_removes_its_result_file()
+    {
+        var runner = new FailingAdministrativeProcessRunner();
+        var service = new WindowsPrinterRegistrationService(runner);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.RegisterAsync(TestContext.Current.CancellationToken));
+
+        Assert.Contains("IPP診断エラー 1234", error.Message);
+        Assert.NotNull(runner.ResultPath);
+        Assert.False(File.Exists(runner.ResultPath));
+    }
+
+    [Fact]
     public async Task Exit_sequence_cleans_up_before_shutdown_and_process_termination()
     {
         var events = new List<string>();
@@ -122,5 +136,19 @@ public sealed class WindowsLifetimeTests
     {
         public Task<ProcessResult> RunAsync(ProcessInvocation invocation, CancellationToken cancellationToken) =>
             throw new Win32Exception(5, "Access is denied.");
+    }
+
+    private sealed class FailingAdministrativeProcessRunner : IProcessRunner
+    {
+        public string? ResultPath { get; private set; }
+
+        public async Task<ProcessResult> RunAsync(ProcessInvocation invocation, CancellationToken cancellationToken)
+        {
+            ResultPath = invocation.Arguments.FirstOrDefault(argument =>
+                argument.EndsWith(".txt", StringComparison.OrdinalIgnoreCase));
+            if (ResultPath is not null)
+                await File.WriteAllTextAsync(ResultPath, "IPP診断エラー 1234", cancellationToken);
+            return new ProcessResult(1, string.Empty, string.Empty);
+        }
     }
 }
