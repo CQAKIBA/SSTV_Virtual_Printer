@@ -1,0 +1,128 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore SstvVPrinter.slnx
+
+      - name: Build
+        run: dotnet build SstvVPrinter.slnx -c Release --no-restore
+
+      - name: Test
+        run: dotnet test SstvVPrinter.slnx -c Release --no-build
+
+  publish:
+    needs: verify
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        rid:
+          - win-x64
+          - win-arm64
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publish ${{ matrix.rid }}
+        shell: pwsh
+        run: >-
+          dotnet publish src/SstvVPrinter.Desktop/SstvVPrinter.Desktop.csproj
+          -c Release
+          -r ${{ matrix.rid }}
+          --self-contained true
+          -p:PublishSingleFile=false
+          -p:PublishTrimmed=false
+          -o artifacts/publish/${{ matrix.rid }}
+
+      - name: Create release archive
+        id: archive
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $rid = '${{ matrix.rid }}'
+          $suffix = if ($rid -eq 'win-arm64') { '-experimental' } else { '' }
+          $name = "SSTV-Virtual-Printer-$tag-$rid$suffix.zip"
+          Get-ChildItem -LiteralPath "artifacts/publish/$rid" -Filter '*.pdb' -File |
+            Remove-Item -Force
+          Compress-Archive -Path "artifacts/publish/$rid/*" -DestinationPath "artifacts/$name"
+          "name=$name" >> $env:GITHUB_OUTPUT
+
+      - name: Upload ${{ matrix.rid }} archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.rid }}
+          path: artifacts/${{ steps.archive.outputs.name }}
+          if-no-files-found: error
+
+  release:
+    needs: publish
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download release archives
+        uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: artifacts/release
+          merge-multiple: true
+
+      - name: Create SHA-256 checksums
+        shell: pwsh
+        run: |
+          $lines = Get-ChildItem -LiteralPath artifacts/release -Filter '*.zip' |
+            Sort-Object Name |
+            ForEach-Object {
+              $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+              "$hash  $($_.Name)"
+            }
+          $lines | Set-Content -LiteralPath artifacts/release/SHA256SUMS.txt -Encoding ascii
+
+      - name: Upload complete release bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: SSTV-Virtual-Printer-${{ github.ref_name }}
+          path: |
+            artifacts/release/*.zip
+            artifacts/release/SHA256SUMS.txt
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+          body: |
+            ## Download
+
+            - **win-x64** is the recommended build.
+            - **win-arm64-experimental** is hardware-untested and supplied for volunteer testing.
+
+            These self-contained, unsigned beta archives do not require a separate .NET installation. Windows SmartScreen may display a warning.
+          files: |
+            artifacts/release/*.zip
+            artifacts/release/SHA256SUMS.txt
+          fail_on_unmatched_files: true

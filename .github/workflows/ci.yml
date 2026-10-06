@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore SstvVPrinter.slnx
+
+      - name: Build
+        run: dotnet build SstvVPrinter.slnx -c Release --no-restore
+
+      - name: Test
+        run: dotnet test SstvVPrinter.slnx -c Release --no-build
