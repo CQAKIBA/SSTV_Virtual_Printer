@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+### Fixed
+
+- Corrected printer registration-state detection by passing PowerShell script arguments through `-File`.
+- Removed the ignored `-Name` argument from IPP registration and ensured the Microsoft IPP Class Driver is available before registration or repair.
+
 ## [0.1.0-beta] - 2026-10-06
 
 ### Added

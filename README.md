@@ -56,7 +56,7 @@ The IPP listener binds to loopback by default. Running this as a LAN print serve
 ## Beta limitations
 
 - Windows 11 is the verified development environment.
-- Windows 10 is best effort and has not yet been verified on real hardware.
+- Windows 10 support requires version 22H2 (build 19045) with current updates and remains best effort; printing has been verified on x64 hardware.
 - ARM64 packages are structurally built but untested on ARM64 hardware.
 - The local IPP / Microsoft IPP Class Driver route remains experimental.
 - PTT and receive functionality are absent.

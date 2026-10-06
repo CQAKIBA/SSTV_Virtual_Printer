@@ -47,8 +47,17 @@ public sealed class WindowsLifetimeTests
         Assert.True(runner.Invocations[1].RunElevated);
         Assert.True(runner.Invocations[2].ShowWindow);
         Assert.True(runner.Invocations[2].RunElevated);
+        Assert.Contains("-File", runner.Invocations[0].Arguments);
+        Assert.DoesNotContain("-Command", runner.Invocations[0].Arguments);
         Assert.Contains(runner.Invocations, invocation => invocation.Arguments.Contains("ipp://localhost:8631/ipp/print"));
         Assert.Contains(runner.Invocations, invocation => invocation.Arguments.Contains("SSTV Virtual Printer Probe"));
+        Assert.Equal(3, runner.Scripts.Count);
+        Assert.All(runner.Scripts.Skip(1), script =>
+        {
+            Assert.Contains("Add-PrinterDriver -Name 'Microsoft IPP Class Driver'", script);
+            Assert.Contains("Add-Printer -IppURL $uri", script);
+            Assert.DoesNotContain("Add-Printer -Name $name -IppURL", script);
+        });
     }
 
     [Fact]
@@ -128,11 +137,16 @@ public sealed class WindowsLifetimeTests
     private sealed class RecordingProcessRunner : IProcessRunner
     {
         public List<ProcessInvocation> Invocations { get; } = [];
+        public List<string> Scripts { get; } = [];
 
-        public Task<ProcessResult> RunAsync(ProcessInvocation invocation, CancellationToken cancellationToken)
+        public async Task<ProcessResult> RunAsync(ProcessInvocation invocation, CancellationToken cancellationToken)
         {
             Invocations.Add(invocation);
-            return Task.FromResult(new ProcessResult(0, string.Empty, string.Empty));
+            string? scriptPath = invocation.Arguments.FirstOrDefault(argument =>
+                argument.EndsWith(".ps1", StringComparison.OrdinalIgnoreCase));
+            if (scriptPath is not null)
+                Scripts.Add(await File.ReadAllTextAsync(scriptPath, cancellationToken));
+            return new ProcessResult(0, string.Empty, string.Empty);
         }
     }
 

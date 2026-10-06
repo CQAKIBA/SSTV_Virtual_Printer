@@ -11,8 +11,8 @@ public sealed class WindowsPrinterRegistrationService : IPrinterRegistrationServ
     private readonly TimeSpan _operationTimeout;
     private readonly string _diagnosticDirectory;
     private const string VerifyScript = "param($name) if (Get-Printer -Name $name -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }";
-    private const string AddScript = "param($name,$uri,$resultPath,$logPath)\n$code=0\n$stamp=Get-Date -Format o\ntry {\n  Add-Content -LiteralPath $logPath -Value \"[$stamp] Register $name at $uri\" -Encoding UTF8 -ErrorAction SilentlyContinue\n  Add-Printer -Name $name -IppURL $uri -ErrorAction Stop\n  Write-Host 'Printer registration completed.' -ForegroundColor Green\n  Add-Content -LiteralPath $logPath -Value \"[$stamp] Registration completed.\" -Encoding UTF8 -ErrorAction SilentlyContinue\n} catch {\n  $detail=$_.Exception.ToString()\n  Write-Host ('Registration failed: ' + $detail) -ForegroundColor Red\n  Set-Content -LiteralPath $resultPath -Value $detail -Encoding UTF8 -ErrorAction SilentlyContinue\n  Add-Content -LiteralPath $logPath -Value \"[$stamp] Registration failed: $detail\" -Encoding UTF8 -ErrorAction SilentlyContinue\n  $code=1\n} finally { Start-Sleep -Seconds 3 }\nexit $code";
-    private const string RepairScript = "param($name,$uri,$resultPath,$logPath)\n$code=0\n$stamp=Get-Date -Format o\ntry {\n  Add-Content -LiteralPath $logPath -Value \"[$stamp] Repair $name at $uri\" -Encoding UTF8 -ErrorAction SilentlyContinue\n  Remove-Printer -Name $name -ErrorAction SilentlyContinue\n  Add-Printer -Name $name -IppURL $uri -ErrorAction Stop\n  Write-Host 'Printer repair completed.' -ForegroundColor Green\n  Add-Content -LiteralPath $logPath -Value \"[$stamp] Repair completed.\" -Encoding UTF8 -ErrorAction SilentlyContinue\n} catch {\n  $detail=$_.Exception.ToString()\n  Write-Host ('Repair failed: ' + $detail) -ForegroundColor Red\n  Set-Content -LiteralPath $resultPath -Value $detail -Encoding UTF8 -ErrorAction SilentlyContinue\n  Add-Content -LiteralPath $logPath -Value \"[$stamp] Repair failed: $detail\" -Encoding UTF8 -ErrorAction SilentlyContinue\n  $code=1\n} finally { Start-Sleep -Seconds 3 }\nexit $code";
+    private const string AddScript = "param($name,$uri,$resultPath,$logPath)\n$code=0\n$stamp=Get-Date -Format o\ntry {\n  Add-Content -LiteralPath $logPath -Value \"[$stamp] Register $name at $uri\" -Encoding UTF8 -ErrorAction SilentlyContinue\n  if (-not (Get-PrinterDriver -Name 'Microsoft IPP Class Driver' -ErrorAction SilentlyContinue)) { Add-PrinterDriver -Name 'Microsoft IPP Class Driver' -ErrorAction Stop }\n  Add-Printer -IppURL $uri -ErrorAction Stop\n  Write-Host 'Printer registration completed.' -ForegroundColor Green\n  Add-Content -LiteralPath $logPath -Value \"[$stamp] Registration completed.\" -Encoding UTF8 -ErrorAction SilentlyContinue\n} catch {\n  $detail=$_.Exception.ToString()\n  Write-Host ('Registration failed: ' + $detail) -ForegroundColor Red\n  Set-Content -LiteralPath $resultPath -Value $detail -Encoding UTF8 -ErrorAction SilentlyContinue\n  Add-Content -LiteralPath $logPath -Value \"[$stamp] Registration failed: $detail\" -Encoding UTF8 -ErrorAction SilentlyContinue\n  $code=1\n} finally { Start-Sleep -Seconds 3 }\nexit $code";
+    private const string RepairScript = "param($name,$uri,$resultPath,$logPath)\n$code=0\n$stamp=Get-Date -Format o\ntry {\n  Add-Content -LiteralPath $logPath -Value \"[$stamp] Repair $name at $uri\" -Encoding UTF8 -ErrorAction SilentlyContinue\n  Remove-Printer -Name $name -ErrorAction SilentlyContinue\n  if (-not (Get-PrinterDriver -Name 'Microsoft IPP Class Driver' -ErrorAction SilentlyContinue)) { Add-PrinterDriver -Name 'Microsoft IPP Class Driver' -ErrorAction Stop }\n  Add-Printer -IppURL $uri -ErrorAction Stop\n  Write-Host 'Printer repair completed.' -ForegroundColor Green\n  Add-Content -LiteralPath $logPath -Value \"[$stamp] Repair completed.\" -Encoding UTF8 -ErrorAction SilentlyContinue\n} catch {\n  $detail=$_.Exception.ToString()\n  Write-Host ('Repair failed: ' + $detail) -ForegroundColor Red\n  Set-Content -LiteralPath $resultPath -Value $detail -Encoding UTF8 -ErrorAction SilentlyContinue\n  Add-Content -LiteralPath $logPath -Value \"[$stamp] Repair failed: $detail\" -Encoding UTF8 -ErrorAction SilentlyContinue\n  $code=1\n} finally { Start-Sleep -Seconds 3 }\nexit $code";
 
     public WindowsPrinterRegistrationService(
         IProcessRunner runner,
@@ -27,7 +27,7 @@ public sealed class WindowsPrinterRegistrationService : IPrinterRegistrationServ
     }
 
     public async Task<bool> VerifyAsync(CancellationToken cancellationToken) =>
-        (await RunAsync(VerifyScript, [ProbePrinter.DisplayName], false, false, cancellationToken)).ExitCode == 0;
+        (await RunScriptFileAsync(VerifyScript, [ProbePrinter.DisplayName], false, false, cancellationToken)).ExitCode == 0;
 
     public async Task RegisterAsync(CancellationToken cancellationToken)
     {
@@ -72,16 +72,30 @@ public sealed class WindowsPrinterRegistrationService : IPrinterRegistrationServ
         }
     }
 
-    private async Task<ProcessResult> RunAsync(
+    private async Task<ProcessResult> RunScriptFileAsync(
         string script,
         IReadOnlyList<string> values,
         bool showWindow,
         bool runElevated,
         CancellationToken cancellationToken)
     {
-        var arguments = new List<string> { "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script };
-        arguments.AddRange(values);
-        return await RunPowerShellAsync(arguments, showWindow, runElevated, cancellationToken);
+        var scriptPath = Path.Combine(Path.GetTempPath(), $"SstvVPrinter-printer-{Guid.NewGuid():N}.ps1");
+        try
+        {
+            await File.WriteAllTextAsync(scriptPath, script, Encoding.Unicode, cancellationToken);
+            var arguments = new List<string>
+            {
+                "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", scriptPath,
+            };
+            arguments.AddRange(values);
+            return await RunPowerShellAsync(arguments, showWindow, runElevated, cancellationToken);
+        }
+        finally
+        {
+            try { File.Delete(scriptPath); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
     }
 
     private async Task<ProcessResult> RunPowerShellAsync(
