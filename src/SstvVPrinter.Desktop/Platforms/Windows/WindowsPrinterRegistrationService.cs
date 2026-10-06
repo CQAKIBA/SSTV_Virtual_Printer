@@ -1,6 +1,7 @@
 using SstvVPrinter.App.Platform;
 using SstvVPrinter.IppProbe.Ipp;
 using System.ComponentModel;
+using System.Text;
 
 namespace SstvVPrinter.Desktop.Platforms.Windows;
 
@@ -8,14 +9,21 @@ public sealed class WindowsPrinterRegistrationService : IPrinterRegistrationServ
 {
     private readonly IProcessRunner _runner;
     private readonly TimeSpan _operationTimeout;
+    private readonly string _diagnosticDirectory;
     private const string VerifyScript = "param($name) if (Get-Printer -Name $name -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }";
-    private const string AddScript = "param($name,$uri,$resultPath) Write-Host 'SSTV仮想プリンタを登録しています...'; Write-Host ('接続先: ' + $uri); $code=0; try { Add-Printer -Name $name -IppURL $uri -ErrorAction Stop; Write-Host '登録が完了しました。' -ForegroundColor Green } catch { $detail=$_.Exception.ToString(); Write-Host ('登録に失敗しました: ' + $detail) -ForegroundColor Red; Set-Content -LiteralPath $resultPath -Value $detail -Encoding UTF8; $code=1 }; Start-Sleep -Seconds 3; exit $code";
-    private const string RepairScript = "param($name,$uri,$resultPath) Write-Host 'SSTV仮想プリンタを修復しています...'; $code=0; try { Remove-Printer -Name $name -ErrorAction SilentlyContinue; Write-Host '再登録しています...'; Add-Printer -Name $name -IppURL $uri -ErrorAction Stop; Write-Host '修復が完了しました。' -ForegroundColor Green } catch { $detail=$_.Exception.ToString(); Write-Host ('修復に失敗しました: ' + $detail) -ForegroundColor Red; Set-Content -LiteralPath $resultPath -Value $detail -Encoding UTF8; $code=1 }; Start-Sleep -Seconds 3; exit $code";
+    private const string AddScript = "param($name,$uri,$resultPath,$logPath)\n$code=0\n$stamp=Get-Date -Format o\ntry {\n  Add-Content -LiteralPath $logPath -Value \"[$stamp] Register $name at $uri\" -Encoding UTF8 -ErrorAction SilentlyContinue\n  Add-Printer -Name $name -IppURL $uri -ErrorAction Stop\n  Write-Host 'Printer registration completed.' -ForegroundColor Green\n  Add-Content -LiteralPath $logPath -Value \"[$stamp] Registration completed.\" -Encoding UTF8 -ErrorAction SilentlyContinue\n} catch {\n  $detail=$_.Exception.ToString()\n  Write-Host ('Registration failed: ' + $detail) -ForegroundColor Red\n  Set-Content -LiteralPath $resultPath -Value $detail -Encoding UTF8 -ErrorAction SilentlyContinue\n  Add-Content -LiteralPath $logPath -Value \"[$stamp] Registration failed: $detail\" -Encoding UTF8 -ErrorAction SilentlyContinue\n  $code=1\n} finally { Start-Sleep -Seconds 3 }\nexit $code";
+    private const string RepairScript = "param($name,$uri,$resultPath,$logPath)\n$code=0\n$stamp=Get-Date -Format o\ntry {\n  Add-Content -LiteralPath $logPath -Value \"[$stamp] Repair $name at $uri\" -Encoding UTF8 -ErrorAction SilentlyContinue\n  Remove-Printer -Name $name -ErrorAction SilentlyContinue\n  Add-Printer -Name $name -IppURL $uri -ErrorAction Stop\n  Write-Host 'Printer repair completed.' -ForegroundColor Green\n  Add-Content -LiteralPath $logPath -Value \"[$stamp] Repair completed.\" -Encoding UTF8 -ErrorAction SilentlyContinue\n} catch {\n  $detail=$_.Exception.ToString()\n  Write-Host ('Repair failed: ' + $detail) -ForegroundColor Red\n  Set-Content -LiteralPath $resultPath -Value $detail -Encoding UTF8 -ErrorAction SilentlyContinue\n  Add-Content -LiteralPath $logPath -Value \"[$stamp] Repair failed: $detail\" -Encoding UTF8 -ErrorAction SilentlyContinue\n  $code=1\n} finally { Start-Sleep -Seconds 3 }\nexit $code";
 
-    public WindowsPrinterRegistrationService(IProcessRunner runner, TimeSpan? operationTimeout = null)
+    public WindowsPrinterRegistrationService(
+        IProcessRunner runner,
+        TimeSpan? operationTimeout = null,
+        string? diagnosticDirectory = null)
     {
         _runner = runner;
         _operationTimeout = operationTimeout ?? TimeSpan.FromSeconds(60);
+        _diagnosticDirectory = Path.GetFullPath(diagnosticDirectory ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "SstvVPrinter"));
     }
 
     public async Task<bool> VerifyAsync(CancellationToken cancellationToken) =>
@@ -34,14 +42,18 @@ public sealed class WindowsPrinterRegistrationService : IPrinterRegistrationServ
     private async Task RunAdministrativeAsync(string script, CancellationToken cancellationToken)
     {
         var resultPath = Path.Combine(Path.GetTempPath(), $"SstvVPrinter-printer-{Guid.NewGuid():N}.txt");
+        var scriptPath = Path.Combine(Path.GetTempPath(), $"SstvVPrinter-printer-{Guid.NewGuid():N}.ps1");
+        Directory.CreateDirectory(_diagnosticDirectory);
+        var logPath = Path.Combine(_diagnosticDirectory, "printer-setup.log");
         try
         {
-            var result = await RunAsync(
-                script,
-                [ProbePrinter.DisplayName, ProbePrinter.DefaultPrinterUri, resultPath],
-                true,
-                true,
-                cancellationToken);
+            await File.WriteAllTextAsync(scriptPath, script, Encoding.Unicode, cancellationToken);
+            var arguments = new List<string>
+            {
+                "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", scriptPath,
+                ProbePrinter.DisplayName, ProbePrinter.DefaultPrinterUri, resultPath, logPath,
+            };
+            var result = await RunPowerShellAsync(arguments, true, true, cancellationToken);
             if (result.ExitCode == 0) return;
 
             var detail = File.Exists(resultPath)
@@ -52,6 +64,9 @@ public sealed class WindowsPrinterRegistrationService : IPrinterRegistrationServ
         finally
         {
             try { File.Delete(resultPath); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+            try { File.Delete(scriptPath); }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
         }
@@ -66,6 +81,15 @@ public sealed class WindowsPrinterRegistrationService : IPrinterRegistrationServ
     {
         var arguments = new List<string> { "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script };
         arguments.AddRange(values);
+        return await RunPowerShellAsync(arguments, showWindow, runElevated, cancellationToken);
+    }
+
+    private async Task<ProcessResult> RunPowerShellAsync(
+        IReadOnlyList<string> arguments,
+        bool showWindow,
+        bool runElevated,
+        CancellationToken cancellationToken)
+    {
         using var timeout = new CancellationTokenSource(_operationTimeout);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
         try

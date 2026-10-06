@@ -77,15 +77,28 @@ public sealed class WindowsLifetimeTests
     [Fact]
     public async Task Printer_registration_surfaces_the_elevated_powershell_error_and_removes_its_result_file()
     {
+        var diagnosticDirectory = Path.Combine(Path.GetTempPath(), $"SstvVPrinter.Tests.{Guid.NewGuid():N}");
         var runner = new FailingAdministrativeProcessRunner();
-        var service = new WindowsPrinterRegistrationService(runner);
+        var service = new WindowsPrinterRegistrationService(runner, diagnosticDirectory: diagnosticDirectory);
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            service.RegisterAsync(TestContext.Current.CancellationToken));
+        try
+        {
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                service.RegisterAsync(TestContext.Current.CancellationToken));
 
-        Assert.Contains("IPP診断エラー 1234", error.Message);
-        Assert.NotNull(runner.ResultPath);
-        Assert.False(File.Exists(runner.ResultPath));
+            Assert.Contains("IPP診断エラー 1234", error.Message);
+            Assert.NotNull(runner.ResultPath);
+            Assert.False(File.Exists(runner.ResultPath));
+            Assert.NotNull(runner.ScriptPath);
+            Assert.False(File.Exists(runner.ScriptPath));
+            Assert.NotNull(runner.LogPath);
+            Assert.True(File.Exists(runner.LogPath));
+            Assert.Contains("IPP診断エラー 1234", await File.ReadAllTextAsync(runner.LogPath, TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            if (Directory.Exists(diagnosticDirectory)) Directory.Delete(diagnosticDirectory, recursive: true);
+        }
     }
 
     [Fact]
@@ -141,13 +154,23 @@ public sealed class WindowsLifetimeTests
     private sealed class FailingAdministrativeProcessRunner : IProcessRunner
     {
         public string? ResultPath { get; private set; }
+        public string? ScriptPath { get; private set; }
+        public string? LogPath { get; private set; }
 
         public async Task<ProcessResult> RunAsync(ProcessInvocation invocation, CancellationToken cancellationToken)
         {
+            ScriptPath = invocation.Arguments.FirstOrDefault(argument =>
+                argument.EndsWith(".ps1", StringComparison.OrdinalIgnoreCase));
             ResultPath = invocation.Arguments.FirstOrDefault(argument =>
                 argument.EndsWith(".txt", StringComparison.OrdinalIgnoreCase));
+            LogPath = invocation.Arguments.FirstOrDefault(argument =>
+                argument.EndsWith(".log", StringComparison.OrdinalIgnoreCase));
+            if (ScriptPath is null || !File.Exists(ScriptPath))
+                throw new InvalidOperationException("Administrative script file was not supplied.");
             if (ResultPath is not null)
                 await File.WriteAllTextAsync(ResultPath, "IPP診断エラー 1234", cancellationToken);
+            if (LogPath is not null)
+                await File.WriteAllTextAsync(LogPath, "IPP診断エラー 1234", cancellationToken);
             return new ProcessResult(1, string.Empty, string.Empty);
         }
     }
