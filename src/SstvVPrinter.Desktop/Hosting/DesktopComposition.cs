@@ -25,12 +25,13 @@ public sealed class DesktopComposition : IAsyncDisposable
     private Task _preferenceSaveTask = Task.CompletedTask;
     private Task? _audioWatchTask;
     private Guid? _preparedJobId;
+    private string _committedCallSign;
     private bool _updatingSelection;
     private readonly object _queueIdentityGate = new();
     private HashSet<Guid> _knownJobIds = [];
     private int _disposed;
 
-    private DesktopComposition(DesktopHost host, MainWindowViewModel viewModel, PrintJobQueue queue, TransmissionController transmission, IUserPreferencesStore preferencesStore, IAudioEndpointMonitor audioMonitor, ApplicationMenuViewModel menu)
+    private DesktopComposition(DesktopHost host, MainWindowViewModel viewModel, PrintJobQueue queue, TransmissionController transmission, IUserPreferencesStore preferencesStore, IAudioEndpointMonitor audioMonitor, ApplicationMenuViewModel menu, string committedCallSign)
     {
         _host = host;
         ViewModel = viewModel;
@@ -39,6 +40,7 @@ public sealed class DesktopComposition : IAsyncDisposable
         _preferencesStore = preferencesStore;
         _audioMonitor = audioMonitor;
         Menu = menu;
+        _committedCallSign = committedCallSign;
     }
 
     public MainWindowViewModel ViewModel { get; }
@@ -84,7 +86,7 @@ public sealed class DesktopComposition : IAsyncDisposable
             new WindowsPrinterRegistrationService(new ProcessRunner()),
             () => queue.Active is not null);
         composition = new DesktopComposition(
-            new DesktopHost([new WebApplicationHostedService(webApplication)]), viewModel, queue, transmission, preferencesStore, audio, menu);
+            new DesktopHost([new WebApplicationHostedService(webApplication)]), viewModel, queue, transmission, preferencesStore, audio, menu, preferences.CallSign);
         composition.WireWindow(window);
         queue.Changed += composition.OnQueueChanged;
         composition.WirePreferencePersistence();
@@ -173,6 +175,19 @@ public sealed class DesktopComposition : IAsyncDisposable
             "プリンタを修復しています（PowerShellを確認してください）...",
             "プリンタを修復しました",
             Menu.RepairPrinterAsync);
+        window.CallSignCommitRequested = CommitCallSignAsync;
+    }
+
+    private async Task CommitCallSignAsync()
+    {
+        if (string.Equals(_committedCallSign, ViewModel.CallSign, StringComparison.Ordinal)) return;
+        _committedCallSign = ViewModel.CallSign;
+        QueuePreferenceSave();
+        if (Queue.Selected is { } selected && _transmission.State is not (JobState.Encoding or JobState.Transmitting))
+        {
+            _preparedJobId = null;
+            await PrepareSelectedAsync(selected);
+        }
     }
 
     private async Task RunPrinterOperationAsync(

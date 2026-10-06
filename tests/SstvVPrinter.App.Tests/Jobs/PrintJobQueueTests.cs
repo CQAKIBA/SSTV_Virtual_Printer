@@ -102,6 +102,20 @@ public sealed class PrintJobQueueTests
         Assert.IsType<System.Collections.Immutable.ImmutableArray<PrintJob>>(observed.Waiting);
     }
 
+    [Fact]
+    public void Selecting_the_already_selected_job_does_not_publish_a_change()
+    {
+        var queue = new PrintJobQueue();
+        var active = CreateJob("active");
+        queue.Enqueue(active);
+        var changeCount = 0;
+        queue.Changed += _ => changeCount++;
+
+        Assert.True(queue.Select(active.Id));
+
+        Assert.Equal(0, changeCount);
+    }
+
     private static PrintJob CreateJob(string sourceName) =>
         new(
             Guid.NewGuid(),

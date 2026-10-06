@@ -70,12 +70,14 @@ public sealed class PwgRasterDecoder
             throw new PwgRasterException("Truncated PWG raster data.", exception);
         }
 
+        var normalized = PwgOrientationNormalizer.Normalize(
+            header.Width, header.Height, header.Orientation, physicalPixels, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         var metadata = new PwgPageMetadata(
-            header.Width, header.Height, header.Width, header.Height,
+            header.Width, header.Height, normalized.Width, normalized.Height,
             header.DpiX, header.DpiY, header.Orientation,
             header.PageWidthPoints, header.PageHeightPoints);
-        return DecodedPage.CreateOwned(header.Width, header.Height, physicalPixels, metadata);
+        return DecodedPage.CreateOwned(normalized.Width, normalized.Height, normalized.Rgb24, metadata);
     }
 
     private static async ValueTask DecodeRowAsync(Stream source, Memory<byte> row, int width, CancellationToken cancellationToken)

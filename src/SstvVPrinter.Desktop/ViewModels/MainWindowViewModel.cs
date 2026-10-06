@@ -151,8 +151,8 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
     public void ApplyTransmissionState(JobState state, double progress, TimeSpan? remaining)
     {
         ProgressPercent = Math.Clamp(progress, 0, 1) * 100;
-        IsSettingsLocked = state is JobState.Preparing or JobState.Encoding or JobState.Transmitting;
-        CanStop = IsSettingsLocked;
+        IsSettingsLocked = state is JobState.Encoding or JobState.Transmitting;
+        CanStop = state is JobState.Preparing or JobState.Encoding or JobState.Transmitting;
         StatusText = state switch
         {
             JobState.Encoding => "信号生成中",

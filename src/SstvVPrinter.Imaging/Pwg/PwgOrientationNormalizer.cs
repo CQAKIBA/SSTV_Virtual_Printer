@@ -26,9 +26,9 @@ internal static class PwgOrientationNormalizer
                 var (sourceX, sourceY) = orientation switch
                 {
                     0 => (x, y),
-                    1 => (physicalWidth - 1 - y, x),
+                    1 => (y, physicalHeight - 1 - x),
                     2 => (physicalWidth - 1 - x, physicalHeight - 1 - y),
-                    3 => (y, physicalHeight - 1 - x),
+                    3 => (physicalWidth - 1 - y, x),
                     _ => throw new ArgumentOutOfRangeException(nameof(orientation)),
                 };
 

@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
 using SstvVPrinter.Desktop.Imaging;
@@ -35,6 +36,26 @@ public sealed partial class MainWindow : Window
     public Func<Task>? VerifyPrinterRequested { get; set; }
     public Func<Task>? RegisterPrinterRequested { get; set; }
     public Func<Task>? RepairPrinterRequested { get; set; }
+    public Func<Task>? CallSignCommitRequested { get; set; }
+
+    private async void OnCallSignKeyDown(object? sender, KeyEventArgs args)
+    {
+        if (args.Key != Key.Enter || sender is not TextBox textBox || CallSignCommitRequested is null) return;
+        args.Handled = true;
+        var caretIndex = textBox.CaretIndex;
+        var selectionStart = textBox.SelectionStart;
+        var selectionEnd = textBox.SelectionEnd;
+        await CallSignCommitRequested();
+        textBox.Focus();
+        textBox.CaretIndex = Math.Min(caretIndex, textBox.Text?.Length ?? 0);
+        textBox.SelectionStart = Math.Min(selectionStart, textBox.Text?.Length ?? 0);
+        textBox.SelectionEnd = Math.Min(selectionEnd, textBox.Text?.Length ?? 0);
+    }
+
+    private async void OnCallSignLostFocus(object? sender, RoutedEventArgs args)
+    {
+        if (CallSignCommitRequested is not null) await CallSignCommitRequested();
+    }
 
     private async void OnSendClick(object? sender, RoutedEventArgs args)
     {

@@ -7,14 +7,14 @@ public sealed class PwgOrientationTests
     public static TheoryData<int, int, int, byte[]> Orientations => new()
     {
         { 0, 2, 3, [1, 2, 3, 4, 5, 6] },
-        { 1, 2, 3, [1, 2, 3, 4, 5, 6] },
-        { 2, 2, 3, [1, 2, 3, 4, 5, 6] },
-        { 3, 2, 3, [1, 2, 3, 4, 5, 6] },
+        { 1, 3, 2, [5, 3, 1, 6, 4, 2] },
+        { 2, 2, 3, [6, 5, 4, 3, 2, 1] },
+        { 3, 3, 2, [2, 4, 6, 1, 3, 5] },
     };
 
     [Theory]
     [MemberData(nameof(Orientations))]
-    public async Task Decode_preserves_raster_pixels_for_all_printer_orientations(
+    public async Task Decode_applies_inverse_printer_orientation_to_raster_pixels(
         int orientation,
         int expectedWidth,
         int expectedHeight,

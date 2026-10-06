@@ -77,6 +77,11 @@ public sealed class PrintJobQueue
                 return false;
             }
 
+            if (_selectedId == id)
+            {
+                return true;
+            }
+
             _selectedId = id;
             snapshot = CreateSnapshot();
         }

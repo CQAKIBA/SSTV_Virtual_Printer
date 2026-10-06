@@ -142,6 +142,24 @@ public sealed class MainWindowViewModelTests
         Assert.Equal("残り 01:30", viewModel.RemainingTimeText);
     }
 
+    [Fact]
+    public void Preparing_keeps_settings_editable_but_disables_actions()
+    {
+        var service = new ControlledPreparationService();
+        var viewModel = new MainWindowViewModel(service)
+        {
+            SelectedAudioEndpoint = new AudioEndpointInfo("test", "Test", true, 50, false),
+        };
+
+        _ = viewModel.UpdatePreviewAsync(
+            CreateJob(), new TransmissionSettings("JA1UMW", SstvMode.Scottie2, 1));
+
+        Assert.Equal("プレビュー生成中", viewModel.StatusText);
+        Assert.False(viewModel.IsSettingsLocked);
+        Assert.False(viewModel.CanSend);
+        Assert.False(viewModel.CanSaveWave);
+    }
+
     private static PrintJob CreateJob() =>
         new(
             Guid.NewGuid(), "Paint", DateTimeOffset.UtcNow,
