@@ -9,9 +9,10 @@ namespace SstvVPrinter.Desktop.Imaging;
 
 public static class AvaloniaFrameBitmapFactory
 {
-    public static WriteableBitmap Create(RgbFrame frame)
+    public static WriteableBitmap Create(RgbFrame frame, int verticalScale = 1)
     {
         ArgumentNullException.ThrowIfNull(frame);
+        frame = PreviewFrameFactory.Create(frame, verticalScale);
         var bitmap = new WriteableBitmap(
             new PixelSize(frame.Width, frame.Height),
             new Vector(96, 96),

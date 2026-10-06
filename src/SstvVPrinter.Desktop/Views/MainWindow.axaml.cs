@@ -132,7 +132,8 @@ public sealed partial class MainWindow : Window
             {
                 viewModel.PreviewBitmap?.Dispose();
                 viewModel.PreviewBitmap = viewModel.Preview is { } preview
-                    ? AvaloniaFrameBitmapFactory.Create(preview.Frame)
+                    ? AvaloniaFrameBitmapFactory.Create(
+                        preview.Frame, preview.Options.HorizontalSampleMultiplier)
                     : null;
             }
         };
