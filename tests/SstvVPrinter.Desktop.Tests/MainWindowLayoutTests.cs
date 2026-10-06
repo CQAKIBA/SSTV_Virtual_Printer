@@ -32,6 +32,7 @@ public sealed class MainWindowLayoutTests
 
         Assert.Equal("OnCallSignKeyDown", textBox.Attribute("KeyDown")?.Value);
         Assert.Equal("OnCallSignLostFocus", textBox.Attribute("LostFocus")?.Value);
+        Assert.Equal("Enter your call sign", textBox.Attribute("PlaceholderText")?.Value);
     }
 
     [Fact]
