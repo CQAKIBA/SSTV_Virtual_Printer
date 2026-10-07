@@ -27,6 +27,20 @@ The wider aim is to create more opportunities for amateur radio and MOE / creati
 
 Only transmission is in scope. Reception remains the job of your preferred SSTV decoder.
 
+## Project innovations
+
+Amateur radio is not only a place to preserve established modes. It is one of the few fields where an individual can still question an old assumption, build the complete signal path, and test the result over a real channel. SSTV Virtual Printer is intended to encourage that kind of experimentation: traditional analogue SSTV still has unexplored room for new interfaces and better signal generation.
+
+### Print as a universal SSTV interface
+
+Most SSTV applications expect images to be imported, copied, or edited inside their own limited workflow. This project instead uses the operating system's print pipeline as an application-neutral image interface. Drawing, painting, illustration, DTP, office, and other printable software can become an SSTV image source without dedicated plug-ins or application-specific integration. If an application can print, it can participate.
+
+### More detail from classic analogue SSTV
+
+The horizontal scan in analogue SSTV is continuous; the familiar 320-pixel width is a sampling convention rather than a value explicitly carried in the signal. The optional **Horizontal resolution 2x** mode therefore keeps 640 horizontal source samples during signal synthesis instead of first reducing the image to 320. It does not change the VIS code, line count, scan timing, or transmission duration, so conventional 320-pixel receivers remain compatible.
+
+Practical acoustic-loopback tests with existing receivers showed reduced pixel-to-pixel bleeding and better apparent contrast, especially in fine, low-contrast line art. The result suggests that even traditional SSTV modes may still offer useful image-quality headroom through improved transmitter-side synthesis. This remains an experimental finding rather than a new SSTV standard, and the benefit depends on the audio path, radio channel, and decoder. Operators and developers are invited to measure it, challenge it, and improve it.
+
 ## Download
 
 Download a ZIP from [GitHub Releases](https://github.com/CQAKIBA/SSTV_Virtual_Printer/releases):
