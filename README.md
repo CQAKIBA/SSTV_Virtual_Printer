@@ -39,7 +39,7 @@ Most SSTV applications expect images to be imported, copied, or edited inside th
 
 The horizontal scan in analogue SSTV is continuous; the familiar 320-pixel width is a sampling convention rather than a value explicitly carried in the signal. The optional **Horizontal resolution 2x** mode therefore keeps 640 horizontal source samples during signal synthesis instead of first reducing the image to 320. It does not change the VIS code, line count, scan timing, or transmission duration, so conventional 320-pixel receivers remain compatible.
 
-Practical acoustic-loopback tests with existing receivers showed reduced pixel-to-pixel bleeding and better apparent contrast, especially in fine, low-contrast line art. The result suggests that even traditional SSTV modes may still offer useful image-quality headroom through improved transmitter-side synthesis. This remains an experimental finding rather than a new SSTV standard, and the benefit depends on the audio path, radio channel, and decoder. Operators and developers are invited to measure it, challenge it, and improve it.
+Tests with existing receiver software showed reduced pixel-to-pixel bleeding and better apparent contrast, especially in fine, low-contrast line art. The result suggests that even traditional SSTV modes may still offer useful image-quality headroom through improved transmitter-side synthesis. This remains an experimental finding rather than a new SSTV standard, and the benefit depends on the audio path, radio channel, and decoder. Operators and developers are invited to measure it, challenge it, and improve it.
 
 ## Download
 
@@ -70,7 +70,7 @@ The IPP listener binds to loopback by default. Running this as a LAN print serve
 ## Beta limitations
 
 - Windows 11 is the verified development environment.
-- Windows 10 support requires version 22H2 (build 19045) with current updates and remains best effort; printing has been verified on x64 hardware.
+- Windows 10 support is best effort and requires **version 22H2 (OS build 19045) with the latest Windows updates applied**; printing has been verified on x64 hardware. Testing confirmed that an older 21H2 / OS build 19044 installation lacked the required IPP setup path and could not be configured normally. To check your version, right-click **Start**, open **System**, and find **Version** and **OS build** under **Windows specifications**. Apply Windows Update before attempting printer registration.
 - ARM64 packages are structurally built but untested on ARM64 hardware.
 - The local IPP / Microsoft IPP Class Driver route remains experimental.
 - PTT and receive functionality are absent.
