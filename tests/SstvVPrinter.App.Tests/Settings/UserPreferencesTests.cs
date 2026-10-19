@@ -50,6 +50,41 @@ public sealed class UserPreferencesTests : IDisposable
         Assert.Equal(0, result.RotationDegrees);
     }
 
+    [Theory]
+    [InlineData(0, SstvMode.Martin1, 1)]
+    [InlineData(1, SstvMode.Scottie1, 2)]
+    [InlineData(2, SstvMode.Scottie2, 1)]
+    [InlineData(3, SstvMode.Robot36, 2)]
+    public async Task Legacy_numeric_sstv_modes_keep_their_original_meaning(
+        int storedMode,
+        SstvMode expectedMode,
+        int multiplier)
+    {
+        var settingsDirectory = Path.Combine(_directory, "SstvVPrinter");
+        Directory.CreateDirectory(settingsDirectory);
+        await File.WriteAllTextAsync(
+            Path.Combine(settingsDirectory, "settings.json"),
+            $$"""{"CallSign":"TEST","Mode":{{storedMode}},"HorizontalSampleMultiplier":{{multiplier}},"AudioEndpointId":null,"StartAtSignIn":false}""");
+
+        var result = await new JsonUserPreferencesStore(_directory).LoadAsync();
+
+        Assert.Equal(expectedMode, result.Mode);
+        Assert.Equal(multiplier, result.HorizontalSampleMultiplier);
+    }
+
+    [Fact]
+    public void Preferences_accept_radiofax_mode_with_effective_multiplier_one()
+    {
+        var preferences = new UserPreferences(
+            "TEST",
+            SstvMode.Radiofax120Ioc288,
+            1,
+            null,
+            true);
+
+        Assert.Equal(SstvMode.Radiofax120Ioc288, preferences.Mode);
+    }
+
     [Fact]
     public async Task Save_is_atomic_and_round_trips_only_preferences()
     {

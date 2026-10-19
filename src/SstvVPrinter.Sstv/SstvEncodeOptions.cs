@@ -2,7 +2,7 @@ namespace SstvVPrinter.Sstv;
 
 public sealed record SstvEncodeOptions
 {
-    public const int SampleRate = 48_000;
+    public const int SampleRate = Signal.SignalConstants.SampleRate;
 
     public SstvEncodeOptions(
         SstvMode Mode,

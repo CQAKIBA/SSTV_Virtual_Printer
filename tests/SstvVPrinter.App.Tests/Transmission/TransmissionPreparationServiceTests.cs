@@ -8,6 +8,14 @@ namespace SstvVPrinter.App.Tests.Transmission;
 
 public sealed class TransmissionPreparationServiceTests
 {
+    [Fact]
+    public void Transmission_settings_accept_radiofax_mode_metadata()
+    {
+        var settings = new TransmissionSettings("TEST", SstvMode.Radiofax120Ioc576, 1);
+
+        Assert.Equal(SstvMode.Radiofax120Ioc576, settings.Mode);
+    }
+
     [Theory]
     [InlineData(SstvMode.Scottie2, 1, 320, 256)]
     [InlineData(SstvMode.Scottie2, 2, 640, 256)]

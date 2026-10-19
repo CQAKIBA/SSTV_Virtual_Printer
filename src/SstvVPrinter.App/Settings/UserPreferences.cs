@@ -16,7 +16,7 @@ public sealed record UserPreferences
         int RotationDegrees = 0)
     {
         ArgumentNullException.ThrowIfNull(CallSign);
-        _ = SstvModes.Get(Mode);
+        TransmissionModes.Validate(Mode);
         if (HorizontalSampleMultiplier is not (1 or 2))
         {
             throw new ArgumentOutOfRangeException(nameof(HorizontalSampleMultiplier));
