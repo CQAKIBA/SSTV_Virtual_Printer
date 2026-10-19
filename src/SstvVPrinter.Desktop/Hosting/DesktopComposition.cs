@@ -52,7 +52,7 @@ public sealed class DesktopComposition : IAsyncDisposable
         IUserPreferencesStore preferencesStore = new JsonUserPreferencesStore();
         var preferences = await preferencesStore.LoadAsync(cancellationToken);
         var queue = new PrintJobQueue();
-        var viewModel = new MainWindowViewModel(new TransmissionPreparationService(new SstvFrameComposer()))
+        var viewModel = new MainWindowViewModel(new TransmissionPreparationService(new TransmissionFrameComposer()))
         {
             CallSign = preferences.CallSign,
             SelectedMode = preferences.Mode,
@@ -257,7 +257,7 @@ public sealed class DesktopComposition : IAsyncDisposable
     }
 
     private UserPreferences CapturePreferences() => new(
-        ViewModel.CallSign, ViewModel.SelectedMode, ViewModel.IsDoubleHorizontal ? 2 : 1,
+        ViewModel.CallSign, ViewModel.SelectedMode, ViewModel.StoredHorizontalSampleMultiplier,
         ViewModel.SelectedAudioEndpoint?.Id, ViewModel.StartAtSignIn, ViewModel.RotationDegrees);
 
     private TimeSpan? Remaining() => ViewModel.Preview is { } preview

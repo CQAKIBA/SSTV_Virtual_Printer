@@ -10,6 +10,73 @@ namespace SstvVPrinter.Desktop.Tests;
 public sealed class MainWindowViewModelTests
 {
     [Fact]
+    public void Radiofax_modes_follow_existing_sstv_modes_and_force_effective_one_x()
+    {
+        var viewModel = new MainWindowViewModel(new ControlledPreparationService())
+        {
+            IsDoubleHorizontal = true,
+        };
+
+        Assert.Equal(
+            [SstvMode.Scottie2, SstvMode.Scottie1, SstvMode.Martin1, SstvMode.Robot36,
+                SstvMode.Radiofax120Ioc288, SstvMode.Radiofax120Ioc576],
+            viewModel.AvailableModes);
+        viewModel.SelectedMode = SstvMode.Radiofax120Ioc288;
+        Assert.True(viewModel.IsRadiofaxMode);
+        Assert.False(viewModel.IsHorizontalMultiplierEnabled);
+        Assert.False(viewModel.IsDoubleHorizontal);
+        Assert.Equal(2, viewModel.StoredHorizontalSampleMultiplier);
+
+        viewModel.SelectedMode = SstvMode.Scottie2;
+        Assert.False(viewModel.IsRadiofaxMode);
+        Assert.True(viewModel.IsHorizontalMultiplierEnabled);
+        Assert.True(viewModel.IsDoubleHorizontal);
+    }
+
+    [Fact]
+    public async Task Recoverable_radiofax_validation_keeps_discard_and_settings_available()
+    {
+        var service = new ControlledPreparationService();
+        var job = CreateJob();
+        var viewModel = new MainWindowViewModel(service)
+        {
+            SelectedJob = job,
+            IsSelectedJobActive = true,
+        };
+        var update = viewModel.UpdatePreviewAsync(
+            job, new TransmissionSettings("JA1UMW", SstvMode.Radiofax120Ioc288, 1));
+        service.Fail(0, new TransmissionValidationException("画像比率は1:2から2:1までです。"));
+
+        await update;
+
+        Assert.False(viewModel.IsReady);
+        Assert.False(viewModel.CanSend);
+        Assert.False(viewModel.CanSaveWave);
+        Assert.True(viewModel.CanDiscard);
+        Assert.Contains("1:2", viewModel.ValidationError, StringComparison.Ordinal);
+        Assert.False(viewModel.IsSettingsLocked);
+    }
+
+    [Fact]
+    public async Task Stale_valid_generation_cannot_replace_newer_invalid_state()
+    {
+        var service = new ControlledPreparationService();
+        var viewModel = new MainWindowViewModel(service) { SelectedJob = CreateJob() };
+        var first = viewModel.UpdatePreviewAsync(
+            viewModel.SelectedJob, new TransmissionSettings("JA1UMW", SstvMode.Scottie2, 1));
+        var second = viewModel.UpdatePreviewAsync(
+            viewModel.SelectedJob, new TransmissionSettings("JA1UMW", SstvMode.Radiofax120Ioc288, 1));
+        service.Fail(1, new TransmissionValidationException("画像比率は1:2から2:1までです。"));
+        await second;
+        service.Complete(0, 320, 256);
+        await first;
+
+        Assert.False(viewModel.IsReady);
+        Assert.Null(viewModel.Preview);
+        Assert.Contains("1:2", viewModel.ValidationError, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Rotation_buttons_cycle_through_canonical_angles()
     {
         var viewModel = new MainWindowViewModel(new ControlledPreparationService());
@@ -258,7 +325,7 @@ public sealed class MainWindowViewModelTests
         public void Complete(int index, int width, int height)
         {
             var request = Requests[index];
-            var options = new SstvEncodeOptions(
+            var options = new TransmissionEncodeOptions(
                 request.Settings.Mode, request.Settings.HorizontalSampleMultiplier);
             request.Completion.SetResult(new(
                 RgbFrame.Create(width, height, new byte[width * height * 3]),
@@ -266,6 +333,8 @@ public sealed class MainWindowViewModelTests
                 TimeSpan.FromSeconds(72),
                 DateTimeOffset.UtcNow));
         }
+
+        public void Fail(int index, Exception exception) => Requests[index].Completion.SetException(exception);
 
         public sealed record Request(
             TransmissionSettings Settings,

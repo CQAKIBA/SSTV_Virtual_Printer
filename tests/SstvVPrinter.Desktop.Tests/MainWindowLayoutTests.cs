@@ -73,4 +73,19 @@ public sealed class MainWindowLayoutTests
         Assert.Equal("OnRotateCounterclockwiseClick", counterclockwise.Attribute("Click")?.Value);
         Assert.Contains(document.Descendants(), element => element.Attribute("Text")?.Value == "{Binding RotationText}");
     }
+
+    [Fact]
+    public void Protocol_mode_uses_display_converter_and_disables_two_x_for_radiofax()
+    {
+        var path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "SstvVPrinter.Desktop", "Views", "MainWindow.axaml"));
+        var document = XDocument.Load(path);
+        var protocol = document.Descendants().Single(element =>
+            element.Attribute("AutomationProperties.Name")?.Value == "Protocol");
+        var combo = protocol.Descendants().Single(element => element.Name.LocalName == "ComboBox");
+        var checkbox = protocol.Descendants().Single(element =>
+            element.Name.LocalName == "CheckBox" && element.Attribute("Content")?.Value == "水平解像度 2x");
+
+        Assert.Contains("TransmissionModeDisplayConverter", combo.ToString());
+        Assert.Equal("{Binding IsHorizontalMultiplierEnabled}", checkbox.Attribute("IsEnabled")?.Value);
+    }
 }

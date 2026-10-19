@@ -26,10 +26,7 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
     [ObservableProperty]
     private string _callSign = string.Empty;
 
-    [ObservableProperty]
     private SstvMode _selectedMode = SstvMode.Scottie2;
-
-    [ObservableProperty]
     private bool _isDoubleHorizontal;
 
     [ObservableProperty]
@@ -95,11 +92,43 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
     [ObservableProperty]
     private bool _isSelectedJobActive = true;
 
-    public IReadOnlyList<SstvMode> AvailableModes { get; } = [SstvMode.Scottie2, SstvMode.Scottie1, SstvMode.Martin1, SstvMode.Robot36];
+    public IReadOnlyList<SstvMode> AvailableModes { get; } =
+    [
+        SstvMode.Scottie2,
+        SstvMode.Scottie1,
+        SstvMode.Martin1,
+        SstvMode.Robot36,
+        SstvMode.Radiofax120Ioc288,
+        SstvMode.Radiofax120Ioc576,
+    ];
+    public SstvMode SelectedMode
+    {
+        get => _selectedMode;
+        set
+        {
+            if (!SetProperty(ref _selectedMode, value)) return;
+            OnPropertyChanged(nameof(IsRadiofaxMode));
+            OnPropertyChanged(nameof(IsHorizontalMultiplierEnabled));
+            OnPropertyChanged(nameof(IsDoubleHorizontal));
+        }
+    }
+    public bool IsDoubleHorizontal
+    {
+        get => !IsRadiofaxMode && _isDoubleHorizontal;
+        set
+        {
+            if (_isDoubleHorizontal == value) return;
+            _isDoubleHorizontal = value;
+            OnPropertyChanged();
+        }
+    }
+    public bool IsRadiofaxMode => TransmissionModes.IsRadiofax(SelectedMode);
+    public bool IsHorizontalMultiplierEnabled => !IsRadiofaxMode;
+    public int StoredHorizontalSampleMultiplier => _isDoubleHorizontal ? 2 : 1;
     public bool IsPreviewEmpty => PreviewBitmap is null;
     public bool CanSend => IsReady && IsSelectedJobActive && !IsSettingsLocked && SelectedAudioEndpoint?.IsAvailable is true;
     public bool CanSaveWave => IsReady && IsSelectedJobActive && !IsSettingsLocked;
-    public bool CanDiscard => Preview is not null && !IsSettingsLocked;
+    public bool CanDiscard => (Preview is not null || SelectedJob is not null) && !IsSettingsLocked;
     public string RotationText => $"{RotationDegrees}°";
 
     public void RotateClockwise() => RotationDegrees = (RotationDegrees + 90) % 360;
@@ -145,6 +174,17 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
         {
             if (generation == Volatile.Read(ref _preparationGeneration))
                 ApplyTransmissionState(JobState.Stopped, 0, null);
+        }
+        catch (TransmissionValidationException exception)
+        {
+            if (generation == Volatile.Read(ref _preparationGeneration))
+            {
+                Preview = null;
+                IsReady = false;
+                ValidationError = exception.Message;
+                ApplyTransmissionState(JobState.Failed, 0, null);
+                NotifyActionState();
+            }
         }
     }
 
@@ -207,6 +247,7 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
         NotifyActionState();
     }
     partial void OnIsSelectedJobActiveChanged(bool value) => NotifyActionState();
+    partial void OnSelectedJobChanged(PrintJob? value) => NotifyActionState();
 
     private void NotifyActionState()
     {
