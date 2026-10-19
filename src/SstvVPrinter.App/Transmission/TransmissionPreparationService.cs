@@ -13,9 +13,20 @@ public interface ITransmissionPreparationService
         CancellationToken cancellationToken);
 }
 
-public sealed class TransmissionPreparationService(SstvFrameComposer composer)
-    : ITransmissionPreparationService
+public sealed class TransmissionPreparationService : ITransmissionPreparationService
 {
+    private readonly TransmissionFrameComposer _composer;
+
+    public TransmissionPreparationService(TransmissionFrameComposer composer)
+    {
+        _composer = composer ?? throw new ArgumentNullException(nameof(composer));
+    }
+
+    public TransmissionPreparationService(SstvFrameComposer composer)
+        : this(new TransmissionFrameComposer(composer, new RadiofaxFrameComposer()))
+    {
+    }
+
     public Task<PreparedTransmission> PrepareAsync(
         PrintJob job,
         TransmissionSettings settings,
@@ -27,18 +38,30 @@ public sealed class TransmissionPreparationService(SstvFrameComposer composer)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var headerTime = job.AcceptedAt.ToOffset(TimeSpan.FromHours(9));
+            var multiplier = TransmissionModes.IsRadiofax(settings.Mode)
+                ? 1
+                : settings.HorizontalSampleMultiplier;
             var request = new CompositionRequest(
                 settings.Mode,
-                settings.HorizontalSampleMultiplier,
+                multiplier,
                 settings.CallSign,
                 headerTime);
             var page = PageRotator.Rotate(job.Page, settings.RotationDegrees, cancellationToken);
-            var frame = composer.Compose(page, request, cancellationToken);
-            var options = new SstvEncodeOptions(settings.Mode, settings.HorizontalSampleMultiplier);
+            RgbFrame frame;
+            try
+            {
+                frame = _composer.Compose(page, request, cancellationToken);
+            }
+            catch (RadiofaxPageShapeException exception)
+            {
+                throw new TransmissionValidationException(exception.Message, exception);
+            }
+
+            var options = new TransmissionEncodeOptions(settings.Mode, multiplier);
             return new PreparedTransmission(
                 frame,
                 options,
-                SstvDurationEstimator.Estimate(options),
+                TransmissionDurationEstimator.Estimate(frame, options),
                 headerTime);
         }, cancellationToken);
     }

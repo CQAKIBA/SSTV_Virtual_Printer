@@ -39,14 +39,46 @@ public sealed class TransmissionArtifactServiceTests : IDisposable
         Assert.Empty(Directory.EnumerateFiles(_directory));
     }
 
+    [Fact]
+    public async Task Save_writes_radiofax_wave_with_exact_samples_and_monotonic_progress()
+    {
+        Directory.CreateDirectory(_directory);
+        var service = new TransmissionArtifactService(_directory);
+        var destination = Path.Combine(_directory, "fax.wav");
+        var reports = new List<double>();
+        var progress = new InlineProgress(value => reports.Add(value));
+        var frame = RgbFrame.Create(864, 32, new byte[864 * 32 * 3]);
+        var options = new TransmissionEncodeOptions(SstvMode.Radiofax120Ioc288);
+        var prepared = new PreparedTransmission(
+            frame,
+            options,
+            TransmissionDurationEstimator.Estimate(frame, options),
+            DateTimeOffset.UtcNow);
+
+        await service.SaveAsync(prepared, destination, progress, CancellationToken.None);
+
+        var bytes = await File.ReadAllBytesAsync(destination);
+        var expectedSamples = 66 * 48_000;
+        Assert.Equal(expectedSamples * 2, BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(40, 4)));
+        Assert.Equal(0, reports[0]);
+        Assert.Equal(1, reports[^1]);
+        Assert.All(reports.Zip(reports.Skip(1)), pair => Assert.True(pair.First <= pair.Second));
+    }
+
     private static PreparedTransmission CreatePrepared()
     {
-        var options = new SstvEncodeOptions(SstvMode.Robot36);
+        var frame = RgbFrame.Create(320, 240, new byte[320 * 240 * 3]);
+        var options = new TransmissionEncodeOptions(SstvMode.Robot36);
         return new(
-            RgbFrame.Create(320, 240, new byte[320 * 240 * 3]),
+            frame,
             options,
-            SstvDurationEstimator.Estimate(options),
+            TransmissionDurationEstimator.Estimate(frame, options),
             DateTimeOffset.UtcNow);
+    }
+
+    private sealed class InlineProgress(Action<double> report) : IProgress<double>
+    {
+        public void Report(double value) => report(value);
     }
 
     public void Dispose()

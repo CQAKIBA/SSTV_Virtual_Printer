@@ -104,10 +104,11 @@ public sealed class TransmissionControllerTests : IDisposable
 
     private static PreparedTransmission CreatePrepared()
     {
-        var options = new SstvEncodeOptions(SstvMode.Robot36);
+        var frame = RgbFrame.Create(320, 240, new byte[320 * 240 * 3]);
+        var options = new TransmissionEncodeOptions(SstvMode.Robot36);
         return new(
-            RgbFrame.Create(320, 240, new byte[320 * 240 * 3]), options,
-            SstvDurationEstimator.Estimate(options), DateTimeOffset.UtcNow);
+            frame, options,
+            TransmissionDurationEstimator.Estimate(frame, options), DateTimeOffset.UtcNow);
     }
 
     public void Dispose()

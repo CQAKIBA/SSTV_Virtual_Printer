@@ -32,7 +32,61 @@ public sealed class TransmissionPreparationServiceTests
         Assert.Equal(expectedHeight, result.Frame.Height);
         Assert.Equal(mode, result.Options.Mode);
         Assert.Equal(multiplier, result.Options.HorizontalSampleMultiplier);
-        Assert.Equal(SstvDurationEstimator.Estimate(result.Options), result.EstimatedDuration);
+        Assert.Equal(TransmissionDurationEstimator.Estimate(result.Frame, result.Options), result.EstimatedDuration);
+    }
+
+    [Theory]
+    [InlineData(SstvMode.Radiofax120Ioc288, 864, 464)]
+    [InlineData(SstvMode.Radiofax120Ioc576, 1728, 928)]
+    public async Task Prepare_produces_variable_height_grayscale_radiofax(
+        SstvMode mode,
+        int expectedWidth,
+        int expectedHeight)
+    {
+        var service = new TransmissionPreparationService(new TransmissionFrameComposer());
+
+        var result = await service.PrepareAsync(
+            CreateJob(), new TransmissionSettings("JA1UMW", mode, 2), CancellationToken.None);
+
+        Assert.Equal((expectedWidth, expectedHeight), (result.Frame.Width, result.Frame.Height));
+        Assert.Equal(1, result.Options.HorizontalSampleMultiplier);
+        Assert.Equal(TimeSpan.FromSeconds(50 + (expectedHeight * 0.5)), result.EstimatedDuration);
+        var pixel = result.Frame.GetPixel(expectedWidth / 2, expectedHeight / 2);
+        Assert.Equal(pixel.R, pixel.G);
+        Assert.Equal(pixel.G, pixel.B);
+    }
+
+    [Fact]
+    public async Task Prepare_rotates_before_radiofax_composition()
+    {
+        var service = new TransmissionPreparationService(new TransmissionFrameComposer());
+
+        var result = await service.PrepareAsync(
+            CreateJob(),
+            new TransmissionSettings("JA1UMW", SstvMode.Radiofax120Ioc288, 1, 90),
+            CancellationToken.None);
+
+        Assert.Equal((864, 1760), (result.Frame.Width, result.Frame.Height));
+    }
+
+    [Fact]
+    public async Task Prepare_translates_elongated_radiofax_page_to_recoverable_validation_error()
+    {
+        var service = new TransmissionPreparationService(new TransmissionFrameComposer());
+        var page = DecodedPage.Create(
+            2001,
+            1000,
+            new byte[2001 * 1000 * 3],
+            new(2001, 1000, 2001, 1000, 300, 300, 0, 612, 792));
+        var job = new PrintJob(Guid.NewGuid(), "Paint", DateTimeOffset.UtcNow, page);
+
+        var exception = await Assert.ThrowsAsync<TransmissionValidationException>(() =>
+            service.PrepareAsync(
+                job,
+                new TransmissionSettings("JA1UMW", SstvMode.Radiofax120Ioc288, 1),
+                CancellationToken.None));
+
+        Assert.Contains("1:2", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
