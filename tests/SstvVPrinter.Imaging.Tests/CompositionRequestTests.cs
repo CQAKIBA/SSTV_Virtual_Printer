@@ -19,6 +19,18 @@ public sealed class CompositionRequestTests
     }
 
     [Theory]
+    [InlineData(SstvMode.Radiofax120Ioc288)]
+    [InlineData(SstvMode.Radiofax120Ioc576)]
+    public void Constructor_accepts_radiofax_only_at_effective_multiplier_one(SstvMode mode)
+    {
+        var request = new CompositionRequest(mode, 1, "ja1umw", DateTimeOffset.UnixEpoch);
+
+        Assert.Equal(mode, request.Mode);
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new CompositionRequest(mode, 2, "ja1umw", DateTimeOffset.UnixEpoch));
+    }
+
+    [Theory]
     [InlineData(0)]
     [InlineData(3)]
     public void Constructor_rejects_unsupported_multiplier(int multiplier) =>

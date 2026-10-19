@@ -13,9 +13,10 @@ public sealed record CompositionRequest
         DateTimeOffset acceptedAt,
         HeaderPlacement placement = HeaderPlacement.Top)
     {
-        _ = SstvModes.Get(mode);
+        TransmissionModes.Validate(mode);
 
-        if (horizontalSampleMultiplier is not (1 or 2))
+        if (horizontalSampleMultiplier is not (1 or 2) ||
+            (TransmissionModes.IsRadiofax(mode) && horizontalSampleMultiplier != 1))
         {
             throw new ArgumentOutOfRangeException(nameof(horizontalSampleMultiplier));
         }
