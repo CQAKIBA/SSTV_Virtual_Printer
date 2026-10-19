@@ -15,24 +15,27 @@ static async Task<int> RunAsync(string[] args)
         await using var source = new FileStream(options.Input, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.Asynchronous | FileOptions.SequentialScan);
         var page = await new PwgRasterDecoder().DecodeFirstPageAsync(source);
         var request = new CompositionRequest(options.Mode, options.Horizontal, options.CallSign, options.AcceptedAt);
-        var frame = new SstvFrameComposer().Compose(page, request);
+        var frame = new TransmissionFrameComposer().Compose(page, request);
         await PpmWriter.WriteAsync(options.Output, frame);
-        var contentTargetHeight = 240;
-        var contentBounds = FitBounds(page.Width, page.Height, frame.Width, contentTargetHeight);
-        if (options.Mode != SstvMode.Robot36)
-            contentBounds = new(contentBounds.X, contentBounds.Y + 16, contentBounds.Width, contentBounds.Height);
-        var metadataText = HeaderRenderer.MeasureAndSelect(request, frame.Width).MetadataText;
-        var treatment = options.Mode != SstvMode.Robot36
-            ? "dedicated"
-            : contentBounds.Y >= 16 ? "natural-padding" : "50%-white-overlay";
 
         Console.WriteLine($"Physical: {page.Metadata.PhysicalWidth}x{page.Metadata.PhysicalHeight}");
         Console.WriteLine($"Logical: {page.Width}x{page.Height}");
         Console.WriteLine($"Orientation: {page.Metadata.Orientation}");
-        Console.WriteLine($"Mode: {options.Mode}; horizontal: {options.Horizontal}x");
+        Console.WriteLine($"Mode: {TransmissionModes.DisplayName(options.Mode)}; horizontal: {options.Horizontal}x");
         Console.WriteLine($"Frame: {frame.Width}x{frame.Height}");
-        Console.WriteLine($"Content bounds: {contentBounds.X},{contentBounds.Y} {contentBounds.Width}x{contentBounds.Height}");
-        Console.WriteLine($"Header: {treatment}; metadata: {metadataText}");
+        if (!TransmissionModes.IsRadiofax(options.Mode))
+        {
+            var contentBounds = FitBounds(page.Width, page.Height, frame.Width, 240);
+            if (options.Mode != SstvMode.Robot36)
+                contentBounds = new(contentBounds.X, contentBounds.Y + 16, contentBounds.Width, contentBounds.Height);
+            var metadataText = HeaderRenderer.MeasureAndSelect(request, frame.Width).MetadataText;
+            var treatment = options.Mode != SstvMode.Robot36
+                ? "dedicated"
+                : contentBounds.Y >= 16 ? "natural-padding" : "50%-white-overlay";
+            Console.WriteLine($"Content bounds: {contentBounds.X},{contentBounds.Y} {contentBounds.Width}x{contentBounds.Height}");
+            Console.WriteLine($"Header: {treatment}; metadata: {metadataText}");
+        }
+        Console.WriteLine($"Estimated duration: {TransmissionDurationEstimator.Estimate(frame, new(options.Mode, options.Horizontal)):g}");
         Console.WriteLine($"Output: {options.Output}");
         return 0;
     }

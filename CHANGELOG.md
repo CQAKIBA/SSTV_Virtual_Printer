@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+### Added
+
+- Experimental transmit-only Radiofax 120/288 and 120/576 modes with WMO-compatible control signals, grayscale composition, identification header, exact preview, playback, and WAV export.
+- Radiofax page-ratio safety validation covering the inclusive 1:2 through 2:1 range.
+
 ### Fixed
 
 - Corrected printer registration-state detection by passing PowerShell script arguments through `-File`.

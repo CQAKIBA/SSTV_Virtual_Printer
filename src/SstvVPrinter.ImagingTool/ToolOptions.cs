@@ -40,10 +40,24 @@ internal static class ToolOptionsParser
             "scottie1" => SstvMode.Scottie1,
             "scottie2" => SstvMode.Scottie2,
             "robot36" => SstvMode.Robot36,
+            "fax288" => SstvMode.Radiofax120Ioc288,
+            "fax576" => SstvMode.Radiofax120Ioc576,
             var value => throw new ArgumentException($"Unsupported mode: {value}"),
         };
         if (!int.TryParse(Required("--horizontal"), NumberStyles.None, CultureInfo.InvariantCulture, out var horizontal))
             throw new ArgumentException("--horizontal must be 1 or 2.");
+        try
+        {
+            _ = new TransmissionEncodeOptions(mode, horizontal);
+        }
+        catch (ArgumentOutOfRangeException exception)
+        {
+            throw new ArgumentException(
+                TransmissionModes.IsRadiofax(mode)
+                    ? "--horizontal must be 1 for Radiofax modes."
+                    : "--horizontal must be 1 or 2.",
+                exception);
+        }
         var timestamp = Required("--accepted-at");
         if (!Regex.IsMatch(timestamp, @"^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$", RegexOptions.CultureInvariant) ||
             !DateTimeOffset.TryParse(timestamp, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var acceptedAt))

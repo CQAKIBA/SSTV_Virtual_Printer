@@ -15,10 +15,10 @@ The wider aim is to create more opportunities for amateur radio and MOE / creati
 
 - Appears to Windows applications as a local IPP printer.
 - Accepts the first printed page as PWG Raster and opens the preparation window.
-- Fits the page into the selected SSTV frame without changing its aspect ratio.
-- Adds an always-visible RGB, JST timestamp, mode, and call-sign header.
-- Supports Martin 1, Scottie 1, Scottie 2, and Robot 36.
-- Offers experimental 2x horizontal sampling for improved fine-detail reproduction.
+- Fits the page into the selected transmission frame without changing its aspect ratio.
+- Adds an always-visible identification header: RGB for SSTV, or an eight-step grayscale reference for Radiofax.
+- Supports Martin 1, Scottie 1, Scottie 2, Robot 36, and experimental Radiofax 120/288 and 120/576 transmission.
+- Offers experimental 2x horizontal sampling for improved SSTV fine-detail reproduction; Radiofax uses its standard sampling.
 - Corrects troublesome application/page orientations with persistent −90° and +90° controls.
 - Previews the exact composed image, plays SSTV audio through a selected Windows output, or saves it as WAV.
 - Shows Windows master volume continuously and application-session volume while transmitting.
@@ -54,7 +54,7 @@ The archives are self-contained, so a separate .NET installation is not required
 
 1. Extract the release ZIP to a writable folder and start `SstvVPrinter.Desktop.exe`.
 2. Open **Printer (P) → Register**. Approve the Windows UAC prompt. Registration uses the local URL `ipp://localhost:8631/ipp/print`.
-3. Enter your call sign, choose an audio output and SSTV mode, and optionally enable **Horizontal resolution 2x**.
+3. Enter your call sign, choose an audio output and transmission mode, and optionally enable **Horizontal resolution 2x** for SSTV.
 4. In a drawing, painting, illustration, DTP, office, or other printable application, select **SSTV Virtual Printer** and print the page you want. Only the first received page is used.
 5. Check the preview, call sign, orientation, mode, and audio route. Use −90° or +90° if the source application's print layout needs correction.
 6. Choose **Send** for audio playback or **Save WAV** for a file. The app never changes Windows volume for you.
@@ -76,6 +76,8 @@ The IPP listener binds to loopback by default. Running this as a LAN print serve
 - PTT and receive functionality are absent.
 - Only the first page of each print job is processed.
 - Horizontal 2x has decoded successfully in limited tests but remains experimental.
+- Radiofax transmission is experimental and has not yet been certified against real weather-fax equipment or an RF receiver. Its 1:2 through 2:1 input-ratio safeguard rejects unusually long pages before audio generation.
+- A portrait A4 page takes approximately 11:17 in Radiofax 120/288 or 21:44 in Radiofax 120/576, including control signals. Actual duration varies with the composed page ratio.
 - Binaries are not code-signed.
 
 ## Development

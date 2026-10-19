@@ -7,7 +7,7 @@ print client
   -> loopback IPP endpoint
   -> first PWG Raster page
   -> orientation normalization and manual rotation
-  -> SSTV composition and fixed header
+  -> mode-dispatched SSTV or Radiofax composition and fixed header
   -> PCM / WAV
   -> selected Windows audio endpoint
 ```
@@ -15,8 +15,8 @@ print client
 ## Projects
 
 - `SstvVPrinter.Ipp` implements the IPP message model, printer capabilities, endpoint, and optional raw capture sink. The desktop app reuses this library without enabling file capture.
-- `SstvVPrinter.Imaging` decodes the first PWG Raster page, normalizes printer orientation, performs manual quarter-turn rotation and detail-preserving fitting, and composes the SSTV frame/header.
-- `SstvVPrinter.Sstv` contains mode definitions, scan planning, VIS generation, PCM rendering, duration estimation, and WAV writing.
+- `SstvVPrinter.Imaging` decodes the first PWG Raster page, normalizes printer orientation, performs manual quarter-turn rotation and detail-preserving fitting, and composes the SSTV or Radiofax frame/header.
+- `SstvVPrinter.Sstv` contains SSTV and Radiofax mode definitions, scan planning, VIS/WMO control signals, PCM rendering, duration estimation, and WAV writing.
 - `SstvVPrinter.App` contains print jobs, queueing, preferences, validation, transmission preparation, and platform abstractions.
 - `SstvVPrinter.Desktop` is the Avalonia UI and Windows integration layer: hosting, audio endpoints/playback, printer/startup registration, notification area, foreground activation, and single-instance coordination.
 - `SstvVPrinter.ImagingTool`, `SstvVPrinter.SstvTool`, and the standalone `SstvVPrinter.IppProbe` executable are diagnostic tools retained for repeatable protocol and image investigations.
@@ -29,9 +29,9 @@ The endpoint accepts a job, stores it in memory, and hands it to the application
 
 ## Composition and transmission
 
-Composition is deterministic for a decoded page, accepted timestamp, call sign, mode, sampling multiplier, and rotation. The UI preview is made from the same composed frame used by the encoder. The fixed header identifies the transmission early; Robot 36 uses an overlay or natural padding where appropriate, while the other modes reserve the header area.
+Composition is deterministic for a decoded page, accepted timestamp, call sign, mode, sampling multiplier, and rotation. The UI preview is made from the same composed frame used by the encoder. The fixed header identifies the transmission early; Robot 36 uses an overlay or natural padding where appropriate, while the other SSTV modes reserve the header area. Radiofax reserves a scaled header with an eight-step grayscale reference, converts the page to grayscale, and rejects source ratios outside the inclusive 1:2 through 2:1 safety range.
 
-Preparation produces an in-memory transmission artifact. Playback and WAV export consume the same PCM stream contract. PTT is intentionally outside the current architecture.
+Preparation produces an in-memory transmission artifact. A mode dispatcher routes it to classic SSTV encoding or WMO-compatible Radiofax control and image signals. Playback and WAV export consume the same PCM stream contract. PTT is intentionally outside the current architecture.
 
 ## Preferences and lifetime
 

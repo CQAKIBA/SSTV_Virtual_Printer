@@ -39,24 +39,27 @@ dotnet run --project src/SstvVPrinter.IppProbe/SstvVPrinter.IppProbe.csproj -- -
 
 Captured print jobs may contain the complete printed document. Never commit them or attach private inputs to public issues.
 
-### SSTV waveform tool
+### Waveform tool
 
-Generates a color-bar WAV for one mode and horizontal sampling setting:
+Generates a color-bar SSTV WAV or a deterministic grayscale Radiofax test WAV:
 
 ```powershell
 dotnet run --project src/SstvVPrinter.SstvTool/SstvVPrinter.SstvTool.csproj -- --mode scottie2 --horizontal 1 --output C:\absolute\output.wav
+dotnet run --project src/SstvVPrinter.SstvTool/SstvVPrinter.SstvTool.csproj -- --mode fax288 --horizontal 1 --output C:\absolute\fax288.wav
+dotnet run --project src/SstvVPrinter.SstvTool/SstvVPrinter.SstvTool.csproj -- --mode fax576 --horizontal 1 --output C:\absolute\fax576.wav
 ```
 
-Accepted modes are `martin1`, `scottie1`, `scottie2`, and `robot36`; horizontal values are `1` or `2`.
+Accepted modes are `martin1`, `scottie1`, `scottie2`, `robot36`, `fax288`, and `fax576`. Horizontal values are `1` or `2` for SSTV; Radiofax requires `--horizontal 1`.
 
 ### Imaging tool
 
-`SstvVPrinter.ImagingTool` converts a captured PWG Raster input into a diagnostic PPM using the production decoder and composer. Run it without valid arguments to see its exact required options.
+`SstvVPrinter.ImagingTool` converts a captured PWG Raster input into a diagnostic PPM using the production decoder and mode-dispatched composer. It accepts the same six mode aliases and Radiofax horizontal restriction as the waveform tool. Run it without valid arguments to see its exact required options.
 
 ## Validation status
 
 - The local IPP / Microsoft IPP Class Driver path has accepted PWG Raster jobs on Windows 11 from Windows Explorer printing, Microsoft Paint, Adobe Acrobat Reader, Microsoft Excel, and PowerShell. Portrait and Acrobat landscape data were decoded after printer-orientation normalization.
 - Martin 1, Scottie 1, Scottie 2, and Robot 36 color-bar WAVs were recognized and displayed by an Android SSTV decoder in both 1x and 2x horizontal variants. This is useful interoperability evidence, not exhaustive receiver certification; 2x remains experimental.
+- Radiofax 120/288 and 120/576 generation follows the documented WMO start, phasing, image, stop, and trailer sequence. Automated timing and composition tests pass, but receiver and real-radio interoperability remain to be tested.
 - The desktop UI, print queue, composition, audio preparation, and lifetime behavior have automated tests. Actual RF transmission, Windows 10, and ARM64 hardware still require external validation.
 
 ## Release process
