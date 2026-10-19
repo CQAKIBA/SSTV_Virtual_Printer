@@ -129,7 +129,7 @@ Use `1500.0 + value * (800.0 / 255.0)`. Validate exact active width and inclusiv
 
 - [ ] **Step 4: Write failing planner sequence and timing tests**
 
-Test both modes for: 5-second 300/675 Hz black-white alternation; 60 phase lines totaling 30 seconds; each phase line starts with 0.025 seconds white then 0.475 seconds black; each image line starts with 0.0225 seconds white dead sector and has 0.4775 seconds active content; 5-second 450 Hz stop alternation; 10-second 1500 Hz trailer; left-to-right luminance order; and total planned duration `45 + frame.Height * 0.5` seconds.
+Test both modes for: 5-second 300/675 Hz black-white alternation; 60 phase lines totaling 30 seconds; each phase line starts with 0.025 seconds white then 0.475 seconds black; each image line starts with 0.0225 seconds white dead sector and has 0.4775 seconds active content; 5-second 450 Hz stop alternation; 10-second 1500 Hz trailer; left-to-right luminance order; and total planned duration `50 + frame.Height * 0.5` seconds.
 
 - [ ] **Step 5: Implement `RadiofaxPlanner` with exact line-duration accounting**
 
@@ -137,11 +137,11 @@ Represent IOC and stop selectors as alternating 1500/2300 Hz spans whose half-cy
 
 - [ ] **Step 6: Add cancellation and PCM-boundary tests**
 
-Assert cancellation during enumeration throws `OperationCanceledException`; inspect the planner spans and assert every phase/image line sums to exactly 0.5 seconds, then render a known-height frame and assert total samples equal `(45 + frame.Height * 0.5) * 48_000`; test maximum legal height passes and one extra line fails before enumeration.
+Assert cancellation during enumeration throws `OperationCanceledException`; inspect the planner spans and assert every phase/image line sums to exactly 0.5 seconds, then render a known-height frame and assert total samples equal `(50 + frame.Height * 0.5) * 48_000`; test maximum legal height passes and one extra line fails before enumeration.
 
 - [ ] **Step 7: Implement Radiofax and generic encoder/duration dispatch**
 
-Complete `TransmissionEncodeOptions.Validate(RgbFrame frame)` by constructing and delegating to the concrete SSTV or Radiofax options. `TransmissionEncoder` must call the existing `SstvEncoder` for modes 0–3 and `RadiofaxEncoder` for modes 4–5. `TransmissionDurationEstimator` delegates to `SstvDurationEstimator` or returns `TimeSpan.FromSeconds(45 + frame.Height * 0.5)` for Radiofax.
+Complete `TransmissionEncodeOptions.Validate(RgbFrame frame)` by constructing and delegating to the concrete SSTV or Radiofax options. `TransmissionEncoder` must call the existing `SstvEncoder` for modes 0–3 and `RadiofaxEncoder` for modes 4–5. `TransmissionDurationEstimator` delegates to `SstvDurationEstimator` or returns `TimeSpan.FromSeconds(50 + frame.Height * 0.5)` for Radiofax.
 
 - [ ] **Step 8: Run signal tests**
 
@@ -231,7 +231,7 @@ git commit -m "feat: compose safe grayscale Radiofax pages"
 
 - [ ] **Step 1: Write failing preparation tests for both Radiofax modes**
 
-Assert manual rotation occurs before ratio validation; 288/576 preparations have effective multiplier 1, expected widths and variable heights, grayscale pixels, and duration `45 + frame.Height * 0.5`; a 2.001:1 page raises `TransmissionValidationException` without invoking encoding.
+Assert manual rotation occurs before ratio validation; 288/576 preparations have effective multiplier 1, expected widths and variable heights, grayscale pixels, and duration `50 + frame.Height * 0.5`; a 2.001:1 page raises `TransmissionValidationException` without invoking encoding.
 
 - [ ] **Step 2: Run preparation tests and verify RED**
 

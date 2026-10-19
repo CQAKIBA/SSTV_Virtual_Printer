@@ -30,4 +30,16 @@ public sealed record TransmissionEncodeOptions
     public int HorizontalSampleMultiplier { get; }
 
     public float Amplitude { get; }
+
+    public void Validate(RgbFrame frame)
+    {
+        ArgumentNullException.ThrowIfNull(frame);
+        if (TransmissionModes.IsRadiofax(Mode))
+        {
+            new Radiofax.RadiofaxEncodeOptions(Mode, Amplitude).Validate(frame);
+            return;
+        }
+
+        new SstvEncodeOptions(Mode, HorizontalSampleMultiplier, Amplitude).Validate(frame);
+    }
 }

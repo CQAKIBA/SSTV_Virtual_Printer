@@ -79,7 +79,7 @@ Radiofax has no fixed vertical page length, so an unchecked source dimension cou
 - IOC 288 body height is capped at 1728 active scan lines;
 - IOC 576 body height is capped at 3456 active scan lines.
 
-The line caps are defense-in-depth checks corresponding to twice each mode's active width. The identification header is additional: 32 lines for IOC 288 and 64 lines for IOC 576. Including the 45 seconds of selection, phasing, stop, and trailer signals, these limits keep total transmission time to approximately 15 minutes 25 seconds for IOC 288 and 29 minutes 57 seconds for IOC 576.
+The line caps are defense-in-depth checks corresponding to twice each mode's active width. The identification header is additional: 32 lines for IOC 288 and 64 lines for IOC 576. Including the 50 seconds of selection, phasing, stop, and trailer signals, these limits keep total transmission time to approximately 15 minutes 30 seconds for IOC 288 and 30 minutes 10 seconds for IOC 576.
 
 When a Radiofax source exceeds the aspect-ratio limit, the application must reject it before allocating or rendering PCM. **Send** and **Save WAV** are disabled, and status explains that the page is too elongated for Radiofax and asks the user to check rotation or print layout. Rotation, switching to an SSTV mode, and discarding the job remain available. A corrected rotation is revalidated and may enable transmission. The encoder independently rejects a frame exceeding its mode's maximum dimensions so non-UI callers cannot bypass the safety limit.
 
