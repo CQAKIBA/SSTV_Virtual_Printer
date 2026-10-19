@@ -118,16 +118,27 @@ public sealed class DetailPreservingResamplerTests
     }
 
     [Fact]
-    public async Task Downscale_observes_cancellation_inside_large_source_footprint()
+    public void Downscale_observes_cancellation_inside_large_source_footprint()
     {
         var source = SolidPage(5000, 5000, new(80, 90, 100));
         using var cancellation = new CancellationTokenSource();
-        var task = Task.Run(() => new DetailPreservingResampler().Fit(source, 1, 1, cancellation.Token));
-        await Task.Delay(20);
+        using var cancellerStarted = new ManualResetEventSlim();
+        var canceller = new Thread(() =>
+        {
+            cancellerStarted.Set();
+            Thread.Sleep(20);
+            cancellation.Cancel();
+        })
+        {
+            IsBackground = true,
+        };
+        canceller.Start();
+        cancellerStarted.Wait();
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        cancellation.Cancel();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
+        Assert.ThrowsAny<OperationCanceledException>(() =>
+            new DetailPreservingResampler().Fit(source, 1, 1, cancellation.Token));
+        canceller.Join();
         Assert.True(stopwatch.Elapsed < TimeSpan.FromMilliseconds(500), $"Cancellation took {stopwatch.Elapsed}.");
     }
 
