@@ -44,7 +44,7 @@ The generated waveform uses a 48 kHz PCM sample rate and the existing applicatio
    - The leading edge of white defines the phase reference.
 3. **Image scan, variable length**
    - Scan each line from left to right and subsequent lines from top to bottom.
-   - Begin each line with a white dead sector occupying 4.5% of the exact line duration, then scan the active image during the remaining 95.5%.
+   - Begin each line with a dead sector occupying 4.5% of the exact line duration. Keep the sector mostly white and place a centered black synchronization pulse in half of it, as permitted by WMO, then scan the active image during the remaining 95.5%.
    - Map luminance linearly to instantaneous subcarrier frequency.
 4. **Stop signal, 5 seconds**
    - Alternate black and white at 450 Hz.
@@ -119,7 +119,7 @@ Automated tests must cover:
 - 5-second IOC selection duration and 300/675 Hz black-white alternation;
 - 30-second, 2 Hz asymmetric phasing with white 5%, black 95%, and white leading edge;
 - exactly 24,000 PCM samples per image scan line at 48 kHz;
-- a white 4.5% dead sector and 95.5% active image interval within every image line;
+- a mostly white 4.5% dead sector with a centered half-sector black synchronization pulse and a 95.5% active image interval within every image line;
 - black, centre gray, and white mapping to 1500, 1900, and 2300 Hz;
 - all eight WMO reference levels;
 - 5-second 450 Hz stop sequence and 10-second black trailer;

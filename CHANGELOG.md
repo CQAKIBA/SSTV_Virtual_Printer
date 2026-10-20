@@ -11,6 +11,7 @@ All notable changes to this project are documented in this file. The format is b
 
 ### Fixed
 
+- Added a standards-permitted black synchronization pulse inside each Radiofax image-line dead sector for improved KG-FAX and Robot36 receiver compatibility.
 - Corrected printer registration-state detection by passing PowerShell script arguments through `-File`.
 - Removed the ignored `-Name` argument from IPP registration and ensured the Microsoft IPP Class Driver is available before registration or repair.
 

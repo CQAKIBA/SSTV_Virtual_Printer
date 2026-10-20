@@ -5,7 +5,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Deterministic>true</Deterministic>
     <LangVersion>14.0</LangVersion>
-    <Version>0.1.0-beta</Version>
+    <Version>0.2.0-beta.3</Version>
     <Authors>Daisuke JA1UMW / CQAKIBA.TOKYO</Authors>
     <Copyright>Copyright (c) 2026 Daisuke JA1UMW / CQAKIBA.TOKYO</Copyright>
     <RepositoryUrl>https://github.com/CQAKIBA/SSTV_Virtual_Printer</RepositoryUrl>

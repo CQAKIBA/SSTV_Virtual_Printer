@@ -6,6 +6,8 @@ public static class RadiofaxPlanner
 {
     private const double BlackHz = 1500;
     private const double WhiteHz = 2300;
+    private const double HalfWhiteDeadSectorSeconds = 0.005625;
+    private const double BlackSyncPulseSeconds = 0.01125;
 
     public static IEnumerable<ToneSpan> Plan(
         RgbFrame frame,
@@ -36,7 +38,9 @@ public static class RadiofaxPlanner
             for (var y = 0; y < frame.Height; y++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                yield return new ToneSpan(WhiteHz, 0.0225);
+                yield return new ToneSpan(WhiteHz, HalfWhiteDeadSectorSeconds);
+                yield return new ToneSpan(BlackHz, BlackSyncPulseSeconds);
+                yield return new ToneSpan(WhiteHz, HalfWhiteDeadSectorSeconds);
                 for (var x = 0; x < frame.Width; x++)
                 {
                     cancellationToken.ThrowIfCancellationRequested();

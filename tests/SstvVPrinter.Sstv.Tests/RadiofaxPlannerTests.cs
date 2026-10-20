@@ -20,7 +20,7 @@ public sealed class RadiofaxPlannerTests
         var selector = spans[..selectorSpanCount];
         var phasing = spans[selectorSpanCount..(selectorSpanCount + 120)];
         var imageStart = selectorSpanCount + 120;
-        var imageSpanCount = height * (width + 1);
+        var imageSpanCount = height * (width + 3);
         var stopStart = imageStart + imageSpanCount;
         var stop = spans[stopStart..(stopStart + 4500)];
         var trailer = spans[^1];
@@ -39,11 +39,15 @@ public sealed class RadiofaxPlannerTests
 
         for (var line = 0; line < height; line++)
         {
-            var lineSpans = spans[(imageStart + (line * (width + 1)))..(imageStart + ((line + 1) * (width + 1)))];
+            var lineSpans = spans[(imageStart + (line * (width + 3)))..(imageStart + ((line + 1) * (width + 3)))];
             Assert.Equal(0.5, lineSpans.Sum(span => span.DurationSeconds), 9);
             Assert.Equal(2300, lineSpans[0].FrequencyHz);
-            Assert.Equal(0.0225, lineSpans[0].DurationSeconds, 12);
-            Assert.Equal(0.4775, lineSpans[1..].Sum(span => span.DurationSeconds), 9);
+            Assert.Equal(0.005625, lineSpans[0].DurationSeconds, 12);
+            Assert.Equal(1500, lineSpans[1].FrequencyHz);
+            Assert.Equal(0.01125, lineSpans[1].DurationSeconds, 12);
+            Assert.Equal(2300, lineSpans[2].FrequencyHz);
+            Assert.Equal(0.005625, lineSpans[2].DurationSeconds, 12);
+            Assert.Equal(0.4775, lineSpans[3..].Sum(span => span.DurationSeconds), 9);
         }
 
         Assert.Equal(5.0, stop.Sum(span => span.DurationSeconds), 9);
@@ -55,7 +59,7 @@ public sealed class RadiofaxPlannerTests
     }
 
     [Fact]
-    public void Plan_scans_active_pixels_left_to_right_after_white_dead_sector()
+    public void Plan_scans_active_pixels_left_to_right_after_synchronized_dead_sector()
     {
         const int width = 864;
         const int height = 32;
@@ -71,8 +75,10 @@ public sealed class RadiofaxPlannerTests
 
         Assert.Equal(2300, spans[firstImageSpan].FrequencyHz);
         Assert.Equal(1500, spans[firstImageSpan + 1].FrequencyHz);
-        Assert.Equal(1901.5686274509803, spans[firstImageSpan + 2].FrequencyHz, 9);
-        Assert.Equal(2300, spans[firstImageSpan + 3].FrequencyHz);
+        Assert.Equal(2300, spans[firstImageSpan + 2].FrequencyHz);
+        Assert.Equal(1500, spans[firstImageSpan + 3].FrequencyHz);
+        Assert.Equal(1901.5686274509803, spans[firstImageSpan + 4].FrequencyHz, 9);
+        Assert.Equal(2300, spans[firstImageSpan + 5].FrequencyHz);
     }
 
     [Fact]
