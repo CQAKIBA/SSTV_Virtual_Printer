@@ -115,4 +115,21 @@ public sealed class MainWindowLayoutTests
         Assert.Contains("{Binding SourceName}", list.ToString());
         Assert.Contains("{Binding Id}", list.ToString());
     }
+
+    [Fact]
+    public void Actions_panel_contains_delete_after_send_setting_below_buttons()
+    {
+        var path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "SstvVPrinter.Desktop", "Views", "MainWindow.axaml"));
+        var document = XDocument.Load(path);
+        var actions = document.Descendants().Single(element =>
+            element.Attribute("AutomationProperties.Name")?.Value == "Actions");
+        var children = actions.Descendants().Where(element =>
+            element.Name.LocalName is "Grid" or "CheckBox").ToArray();
+        var checkbox = children.Single(element =>
+            element.Name.LocalName == "CheckBox"
+            && element.Attribute("Content")?.Value == "送信完了後に削除");
+
+        Assert.True(Array.IndexOf(children, checkbox) > Array.FindIndex(children, element => element.Name.LocalName == "Grid"));
+        Assert.Equal("{Binding DeleteAfterSend}", checkbox.Attribute("IsChecked")?.Value);
+    }
 }

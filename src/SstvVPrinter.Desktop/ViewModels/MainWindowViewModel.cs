@@ -92,6 +92,9 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
     private bool _startAtSignIn = true;
 
     [ObservableProperty]
+    private bool _deleteAfterSend;
+
+    [ObservableProperty]
     private bool _isSelectedJobActive = true;
 
     public IReadOnlyList<SstvMode> AvailableModes { get; } =

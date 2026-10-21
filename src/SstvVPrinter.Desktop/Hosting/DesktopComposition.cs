@@ -60,6 +60,7 @@ public sealed class DesktopComposition : IAsyncDisposable
             RotationDegrees = preferences.RotationDegrees,
             StartAtSignIn = preferences.StartAtSignIn,
             HeaderOverlayModeMask = preferences.HeaderOverlayModeMask,
+            DeleteAfterSend = preferences.DeleteAfterSend,
         };
         IAudioEndpointMonitor audio = new WindowsAudioEndpointMonitor();
         var endpoints = await audio.GetEndpointsAsync(cancellationToken);
@@ -127,7 +128,8 @@ public sealed class DesktopComposition : IAsyncDisposable
             try
             {
                 await _transmission.SendAsync(preview, endpoint.Id, _shutdown.Token);
-                if (_transmission.State == JobState.Completed) Queue.CompleteActive();
+                if (_transmission.State == JobState.Completed)
+                    TransmissionCompletionPolicy.Apply(Queue, ViewModel.DeleteAfterSend);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
@@ -141,7 +143,7 @@ public sealed class DesktopComposition : IAsyncDisposable
             try
             {
                 await _transmission.SaveWaveAsync(preview, path, _shutdown.Token);
-                Queue.CompleteActive();
+                TransmissionCompletionPolicy.Apply(Queue, ViewModel.DeleteAfterSend);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
@@ -227,6 +229,10 @@ public sealed class DesktopComposition : IAsyncDisposable
                 ApplyEndpointState(ViewModel);
                 QueuePreferenceSave();
             }
+            else if (args.PropertyName == nameof(MainWindowViewModel.DeleteAfterSend))
+            {
+                QueuePreferenceSave();
+            }
             else if (PreviewRegenerationPolicy.RequiresRegeneration(args.PropertyName))
             {
                 QueuePreferenceSave();
@@ -260,7 +266,7 @@ public sealed class DesktopComposition : IAsyncDisposable
     private UserPreferences CapturePreferences() => new(
         ViewModel.CallSign, ViewModel.SelectedMode, ViewModel.StoredHorizontalSampleMultiplier,
         ViewModel.SelectedAudioEndpoint?.Id, ViewModel.StartAtSignIn, ViewModel.RotationDegrees,
-        ViewModel.HeaderOverlayModeMask);
+        ViewModel.HeaderOverlayModeMask, ViewModel.DeleteAfterSend);
 
     private TimeSpan? Remaining() => ViewModel.Preview is { } preview
         ? TimeSpan.FromTicks((long)(preview.EstimatedDuration.Ticks * (1 - _transmission.Progress)))

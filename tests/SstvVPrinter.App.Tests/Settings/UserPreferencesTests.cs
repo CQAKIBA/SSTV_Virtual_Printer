@@ -22,6 +22,7 @@ public sealed class UserPreferencesTests : IDisposable
         Assert.True(result.StartAtSignIn);
         Assert.Equal(0, result.RotationDegrees);
         Assert.Equal(0, ReadHeaderOverlayModeMask(result));
+        Assert.False(ReadDeleteAfterSend(result));
     }
 
     [Fact]
@@ -117,7 +118,7 @@ public sealed class UserPreferencesTests : IDisposable
         var settingsDirectory = Path.Combine(_directory, "SstvVPrinter");
         Assert.Empty(Directory.EnumerateFiles(settingsDirectory, "*.tmp"));
         using var document = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(settingsDirectory, "settings.json")));
-        Assert.Equal(7, document.RootElement.EnumerateObject().Count());
+        Assert.Equal(8, document.RootElement.EnumerateObject().Count());
         Assert.False(document.RootElement.TryGetProperty("Page", out _));
         Assert.False(document.RootElement.TryGetProperty("Jobs", out _));
     }
@@ -149,5 +150,12 @@ public sealed class UserPreferencesTests : IDisposable
         var property = typeof(UserPreferences).GetProperty("HeaderOverlayModeMask");
         Assert.NotNull(property);
         return Assert.IsType<int>(property.GetValue(preferences));
+    }
+
+    private static bool ReadDeleteAfterSend(UserPreferences preferences)
+    {
+        var property = typeof(UserPreferences).GetProperty("DeleteAfterSend");
+        Assert.NotNull(property);
+        return Assert.IsType<bool>(property.GetValue(preferences));
     }
 }
