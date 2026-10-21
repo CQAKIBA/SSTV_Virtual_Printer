@@ -9,4 +9,5 @@ public sealed record RadiofaxModeDefinition(
     int ActiveWidth,
     int HeaderHeight,
     int MaximumBodyLines,
-    double IocSelectionHz);
+    double IocSelectionHz,
+    double SyncPulseMilliseconds);

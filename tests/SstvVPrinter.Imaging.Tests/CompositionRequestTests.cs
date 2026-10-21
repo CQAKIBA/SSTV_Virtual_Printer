@@ -19,8 +19,8 @@ public sealed class CompositionRequestTests
     }
 
     [Theory]
-    [InlineData(SstvMode.Radiofax120Ioc288)]
-    [InlineData(SstvMode.Radiofax120Ioc576)]
+    [InlineData(SstvMode.Radiofax120Ioc288Sync20Ms)]
+    [InlineData(SstvMode.Radiofax120Ioc576Sync20Ms)]
     public void Constructor_accepts_radiofax_only_at_effective_multiplier_one(SstvMode mode)
     {
         var request = new CompositionRequest(mode, 1, "ja1umw", DateTimeOffset.UnixEpoch);

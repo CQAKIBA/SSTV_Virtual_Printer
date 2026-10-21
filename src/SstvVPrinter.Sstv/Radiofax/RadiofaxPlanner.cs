@@ -6,8 +6,7 @@ public static class RadiofaxPlanner
 {
     private const double BlackHz = 1500;
     private const double WhiteHz = 2300;
-    private const double HalfWhiteDeadSectorSeconds = 0.005625;
-    private const double BlackSyncPulseSeconds = 0.01125;
+    private const double DeadSectorSeconds = 0.0225;
 
     public static IEnumerable<ToneSpan> Plan(
         RgbFrame frame,
@@ -22,6 +21,8 @@ public static class RadiofaxPlanner
         IEnumerable<ToneSpan> Enumerate()
         {
             var definition = RadiofaxModes.Get(options.Mode);
+            var blackSyncPulseSeconds = definition.SyncPulseMilliseconds / 1000;
+            var halfWhiteDeadSectorSeconds = (DeadSectorSeconds - blackSyncPulseSeconds) / 2;
             foreach (var span in Alternating(definition.IocSelectionHz, 5, cancellationToken))
             {
                 yield return span;
@@ -38,9 +39,9 @@ public static class RadiofaxPlanner
             for (var y = 0; y < frame.Height; y++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                yield return new ToneSpan(WhiteHz, HalfWhiteDeadSectorSeconds);
-                yield return new ToneSpan(BlackHz, BlackSyncPulseSeconds);
-                yield return new ToneSpan(WhiteHz, HalfWhiteDeadSectorSeconds);
+                yield return new ToneSpan(WhiteHz, halfWhiteDeadSectorSeconds);
+                yield return new ToneSpan(BlackHz, blackSyncPulseSeconds);
+                yield return new ToneSpan(WhiteHz, halfWhiteDeadSectorSeconds);
                 for (var x = 0; x < frame.Width; x++)
                 {
                     cancellationToken.ThrowIfCancellationRequested();

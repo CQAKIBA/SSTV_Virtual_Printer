@@ -19,9 +19,9 @@ public sealed class MainWindowViewModelTests
 
         Assert.Equal(
             [SstvMode.Scottie2, SstvMode.Scottie1, SstvMode.Martin1, SstvMode.Robot36,
-                SstvMode.Radiofax120Ioc288, SstvMode.Radiofax120Ioc576],
+                (SstvMode)4, (SstvMode)5, (SstvMode)6, (SstvMode)7],
             viewModel.AvailableModes);
-        viewModel.SelectedMode = SstvMode.Radiofax120Ioc288;
+        viewModel.SelectedMode = (SstvMode)4;
         Assert.True(viewModel.IsRadiofaxMode);
         Assert.False(viewModel.IsHorizontalMultiplierEnabled);
         Assert.False(viewModel.IsDoubleHorizontal);
@@ -44,7 +44,7 @@ public sealed class MainWindowViewModelTests
             IsSelectedJobActive = true,
         };
         var update = viewModel.UpdatePreviewAsync(
-            job, new TransmissionSettings("JA1UMW", SstvMode.Radiofax120Ioc288, 1));
+            job, new TransmissionSettings("JA1UMW", SstvMode.Radiofax120Ioc288Sync20Ms, 1));
         service.Fail(0, new TransmissionValidationException("画像比率は1:2から2:1までです。"));
 
         await update;
@@ -65,7 +65,7 @@ public sealed class MainWindowViewModelTests
         var first = viewModel.UpdatePreviewAsync(
             viewModel.SelectedJob, new TransmissionSettings("JA1UMW", SstvMode.Scottie2, 1));
         var second = viewModel.UpdatePreviewAsync(
-            viewModel.SelectedJob, new TransmissionSettings("JA1UMW", SstvMode.Radiofax120Ioc288, 1));
+            viewModel.SelectedJob, new TransmissionSettings("JA1UMW", SstvMode.Radiofax120Ioc288Sync20Ms, 1));
         service.Fail(1, new TransmissionValidationException("画像比率は1:2から2:1までです。"));
         await second;
         service.Complete(0, 320, 256);

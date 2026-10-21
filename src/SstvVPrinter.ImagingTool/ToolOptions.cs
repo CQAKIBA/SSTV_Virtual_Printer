@@ -40,8 +40,8 @@ internal static class ToolOptionsParser
             "scottie1" => SstvMode.Scottie1,
             "scottie2" => SstvMode.Scottie2,
             "robot36" => SstvMode.Robot36,
-            "fax288" => SstvMode.Radiofax120Ioc288,
-            "fax576" => SstvMode.Radiofax120Ioc576,
+            "fax288" => SstvMode.Radiofax120Ioc288Sync20Ms,
+            "fax576" => SstvMode.Radiofax120Ioc576Sync20Ms,
             var value => throw new ArgumentException($"Unsupported mode: {value}"),
         };
         if (!int.TryParse(Required("--horizontal"), NumberStyles.None, CultureInfo.InvariantCulture, out var horizontal))

@@ -25,8 +25,8 @@ public sealed class ToolOptionsParserTests
     }
 
     [Theory]
-    [InlineData("fax288", SstvMode.Radiofax120Ioc288)]
-    [InlineData("fax576", SstvMode.Radiofax120Ioc576)]
+    [InlineData("fax288", SstvMode.Radiofax120Ioc288Sync20Ms)]
+    [InlineData("fax576", SstvMode.Radiofax120Ioc576Sync20Ms)]
     public void Parse_accepts_radiofax_aliases_at_horizontal_one(string alias, SstvMode expected)
     {
         var options = ToolOptionsParser.Parse(Arguments("2026-10-03T09:00:00Z", alias, "1"));

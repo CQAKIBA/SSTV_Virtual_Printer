@@ -5,19 +5,22 @@ namespace SstvVPrinter.Sstv.Tests;
 public sealed class TransmissionModeTests
 {
     [Fact]
-    public void Existing_and_radiofax_modes_keep_stable_numeric_values()
+    public void Transmission_modes_use_clean_numeric_order()
     {
         Assert.Equal(0, (int)SstvMode.Martin1);
         Assert.Equal(1, (int)SstvMode.Scottie1);
         Assert.Equal(2, (int)SstvMode.Scottie2);
         Assert.Equal(3, (int)SstvMode.Robot36);
-        Assert.Equal(4, (int)SstvMode.Radiofax120Ioc288);
-        Assert.Equal(5, (int)SstvMode.Radiofax120Ioc576);
+        Assert.Equal(
+            [0, 1, 2, 3, 4, 5, 6, 7],
+            Enum.GetValues<SstvMode>().Select(mode => (int)mode));
     }
 
     [Theory]
-    [InlineData(SstvMode.Radiofax120Ioc288, "Radiofax 120/288", 288, 904, 864, 32, 1728, 675)]
-    [InlineData(SstvMode.Radiofax120Ioc576, "Radiofax 120/576", 576, 1809, 1728, 64, 3456, 300)]
+    [InlineData((SstvMode)4, "RadioFAX - 120/288/10ms", 288, 904, 864, 32, 1728, 675)]
+    [InlineData((SstvMode)5, "RadioFAX - 120/288/20ms", 288, 904, 864, 32, 1728, 675)]
+    [InlineData((SstvMode)6, "RadioFAX - 120/576/10ms", 576, 1809, 1728, 64, 3456, 300)]
+    [InlineData((SstvMode)7, "RadioFAX - 120/576/20ms (JMH Standard)", 576, 1809, 1728, 64, 3456, 300)]
     public void Radiofax_catalog_exposes_approved_mode_parameters(
         SstvMode mode,
         string displayName,
@@ -64,7 +67,7 @@ public sealed class TransmissionModeTests
     public void Radiofax_options_reject_horizontal_multiplier_two()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new TransmissionEncodeOptions(SstvMode.Radiofax120Ioc288, HorizontalSampleMultiplier: 2));
+            new TransmissionEncodeOptions(SstvMode.Radiofax120Ioc288Sync20Ms, HorizontalSampleMultiplier: 2));
     }
 
     [Fact]

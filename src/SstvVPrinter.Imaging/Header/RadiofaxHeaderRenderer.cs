@@ -14,8 +14,8 @@ public static class RadiofaxHeaderRenderer
         var jst = request.AcceptedAt.ToOffset(TimeSpan.FromHours(9));
         var label = request.Mode switch
         {
-            SstvMode.Radiofax120Ioc288 => "FAX288",
-            SstvMode.Radiofax120Ioc576 => "FAX576",
+            SstvMode.Radiofax120Ioc288Sync10Ms or SstvMode.Radiofax120Ioc288Sync20Ms => "FAX288",
+            SstvMode.Radiofax120Ioc576Sync10Ms or SstvMode.Radiofax120Ioc576Sync20Ms => "FAX576",
             _ => throw new ArgumentOutOfRangeException(nameof(request)),
         };
         return $"{jst.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)} JST {label}";

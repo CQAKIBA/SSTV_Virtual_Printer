@@ -77,12 +77,12 @@ public sealed class UserPreferencesTests : IDisposable
     {
         var preferences = new UserPreferences(
             "TEST",
-            SstvMode.Radiofax120Ioc288,
+            SstvMode.Radiofax120Ioc288Sync20Ms,
             1,
             null,
             true);
 
-        Assert.Equal(SstvMode.Radiofax120Ioc288, preferences.Mode);
+        Assert.Equal(SstvMode.Radiofax120Ioc288Sync20Ms, preferences.Mode);
     }
 
     [Fact]

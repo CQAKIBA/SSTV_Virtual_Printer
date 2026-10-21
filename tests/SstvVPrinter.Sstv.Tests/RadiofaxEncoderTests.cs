@@ -9,7 +9,7 @@ public sealed class RadiofaxEncoderTests
     public async Task EncodeAsync_renders_exact_total_sample_count()
     {
         var frame = Frame(864, 32);
-        var options = new RadiofaxEncodeOptions(SstvMode.Radiofax120Ioc288);
+        var options = new RadiofaxEncodeOptions(SstvMode.Radiofax120Ioc288Sync20Ms);
 
         var samples = await Count(RadiofaxEncoder.EncodeAsync(frame, options));
 
@@ -26,7 +26,7 @@ public sealed class RadiofaxEncoderTests
         {
             await foreach (var _ in RadiofaxEncoder.EncodeAsync(
                 Frame(864, 32),
-                new RadiofaxEncodeOptions(SstvMode.Radiofax120Ioc288),
+                new RadiofaxEncodeOptions(SstvMode.Radiofax120Ioc288Sync20Ms),
                 cancellation.Token))
             {
             }

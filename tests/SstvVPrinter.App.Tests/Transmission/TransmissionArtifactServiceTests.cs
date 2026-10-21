@@ -48,7 +48,7 @@ public sealed class TransmissionArtifactServiceTests : IDisposable
         var reports = new List<double>();
         var progress = new InlineProgress(value => reports.Add(value));
         var frame = RgbFrame.Create(864, 32, new byte[864 * 32 * 3]);
-        var options = new TransmissionEncodeOptions(SstvMode.Radiofax120Ioc288);
+        var options = new TransmissionEncodeOptions(SstvMode.Radiofax120Ioc288Sync20Ms);
         var prepared = new PreparedTransmission(
             frame,
             options,

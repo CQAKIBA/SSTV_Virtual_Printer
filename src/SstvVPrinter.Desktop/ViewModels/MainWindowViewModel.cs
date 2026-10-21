@@ -98,8 +98,10 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
         SstvMode.Scottie1,
         SstvMode.Martin1,
         SstvMode.Robot36,
-        SstvMode.Radiofax120Ioc288,
-        SstvMode.Radiofax120Ioc576,
+        SstvMode.Radiofax120Ioc288Sync10Ms,
+        SstvMode.Radiofax120Ioc288Sync20Ms,
+        SstvMode.Radiofax120Ioc576Sync10Ms,
+        SstvMode.Radiofax120Ioc576Sync20Ms,
     ];
     public SstvMode SelectedMode
     {

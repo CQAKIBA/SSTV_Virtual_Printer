@@ -17,7 +17,7 @@ public sealed class RadiofaxFrameComposerTests
     {
         var frame = new RadiofaxFrameComposer().Compose(
             SolidPage(width, height, new(255, 0, 0)),
-            Request(SstvMode.Radiofax120Ioc288));
+            Request(SstvMode.Radiofax120Ioc288Sync20Ms));
 
         var expectedBodyHeight = (int)Math.Round(864.0 * height / width, MidpointRounding.AwayFromZero);
         Assert.Equal(864, frame.Width);
@@ -35,14 +35,14 @@ public sealed class RadiofaxFrameComposerTests
         var exception = Assert.Throws<RadiofaxPageShapeException>(() =>
             new RadiofaxFrameComposer().Compose(
                 SolidPage(width, height, new(1, 2, 3)),
-                Request(SstvMode.Radiofax120Ioc288)));
+                Request(SstvMode.Radiofax120Ioc288Sync20Ms)));
 
         Assert.Contains("1:2", exception.Message, StringComparison.Ordinal);
     }
 
     [Theory]
-    [InlineData(SstvMode.Radiofax120Ioc288, 864, 32, 1728)]
-    [InlineData(SstvMode.Radiofax120Ioc576, 1728, 64, 3456)]
+    [InlineData(SstvMode.Radiofax120Ioc288Sync20Ms, 864, 32, 1728)]
+    [InlineData(SstvMode.Radiofax120Ioc576Sync20Ms, 1728, 64, 3456)]
     public void Compose_uses_mode_width_header_and_maximum_body(
         SstvMode mode,
         int expectedWidth,
@@ -64,7 +64,7 @@ public sealed class RadiofaxFrameComposerTests
 
         Assert.Throws<OperationCanceledException>(() => composer.Compose(
             SolidPage(2, 1, new(10, 20, 30)),
-            Request(SstvMode.Radiofax120Ioc288),
+            Request(SstvMode.Radiofax120Ioc288Sync20Ms),
             cancellation.Token));
     }
 
@@ -76,7 +76,7 @@ public sealed class RadiofaxFrameComposerTests
         var sstv = composer.Compose(SolidPage(2, 1, new(9, 8, 7)),
             new(SstvMode.Scottie2, 1, "JA1UMW", DateTimeOffset.UnixEpoch));
         var fax = composer.Compose(SolidPage(2, 1, new(9, 8, 7)),
-            Request(SstvMode.Radiofax120Ioc288));
+            Request(SstvMode.Radiofax120Ioc288Sync20Ms));
 
         Assert.Equal((320, 256), (sstv.Width, sstv.Height));
         Assert.Equal((864, 464), (fax.Width, fax.Height));

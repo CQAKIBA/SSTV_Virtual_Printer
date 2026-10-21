@@ -7,8 +7,8 @@ namespace SstvVPrinter.Imaging.Tests.Header;
 public sealed class RadiofaxHeaderRendererTests
 {
     [Theory]
-    [InlineData(SstvMode.Radiofax120Ioc288, 864, 32, "FAX288")]
-    [InlineData(SstvMode.Radiofax120Ioc576, 1728, 64, "FAX576")]
+    [InlineData(SstvMode.Radiofax120Ioc288Sync20Ms, 864, 32, "FAX288")]
+    [InlineData(SstvMode.Radiofax120Ioc576Sync20Ms, 1728, 64, "FAX576")]
     public void Draw_renders_eight_wmo_gray_cells_outline_and_identification(
         SstvMode mode,
         int width,
