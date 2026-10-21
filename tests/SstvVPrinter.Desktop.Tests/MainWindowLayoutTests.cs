@@ -86,10 +86,33 @@ public sealed class MainWindowLayoutTests
             element.Name.LocalName == "CheckBox" && element.Attribute("Content")?.Value == "水平解像度 2x");
 
         Assert.Contains("TransmissionModeDisplayConverter", combo.ToString());
+        Assert.Equal("Stretch", combo.Attribute("HorizontalAlignment")?.Value);
         Assert.Equal("{Binding IsHorizontalMultiplierEnabled}", checkbox.Attribute("IsEnabled")?.Value);
         Assert.Contains(protocol.Descendants(), element =>
             element.Name.LocalName == "CheckBox"
             && element.Attribute("Content")?.Value == "ヘッダを画像に重ねる"
             && element.Attribute("IsChecked")?.Value == "{Binding IsHeaderOverlay}");
+    }
+
+
+    [Fact]
+    public void Print_queue_uses_datetime_source_and_uuid_columns_in_that_order()
+    {
+        var path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "SstvVPrinter.Desktop", "Views", "MainWindow.axaml"));
+        var document = XDocument.Load(path);
+        var queue = document.Descendants().Single(element =>
+            element.Attribute("AutomationProperties.Name")?.Value == "Print job queue");
+        var headers = queue.Descendants()
+            .Where(element => element.Name.LocalName == "TextBlock")
+            .Select(element => element.Attribute("Text")?.Value)
+            .Where(value => value is "日時" or "ソース名" or "UUID")
+            .Select(value => value!)
+            .ToArray();
+        var list = queue.Descendants().Single(element => element.Name.LocalName == "ListBox");
+
+        Assert.Equal(["日時", "ソース名", "UUID"], headers);
+        Assert.Contains("{Binding AcceptedAt", list.ToString());
+        Assert.Contains("{Binding SourceName}", list.ToString());
+        Assert.Contains("{Binding Id}", list.ToString());
     }
 }
