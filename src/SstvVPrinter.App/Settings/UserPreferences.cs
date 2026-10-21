@@ -5,7 +5,7 @@ namespace SstvVPrinter.App.Settings;
 public sealed record UserPreferences
 {
     public static UserPreferences Default { get; } =
-        new(string.Empty, SstvMode.Scottie2, 1, null, true, 0);
+        new(string.Empty, SstvMode.Scottie2, 1, null, true, 0, 0);
 
     public UserPreferences(
         string CallSign,
@@ -13,7 +13,8 @@ public sealed record UserPreferences
         int HorizontalSampleMultiplier,
         string? AudioEndpointId,
         bool StartAtSignIn,
-        int RotationDegrees = 0)
+        int RotationDegrees = 0,
+        int HeaderOverlayModeMask = 0)
     {
         ArgumentNullException.ThrowIfNull(CallSign);
         TransmissionModes.Validate(Mode);
@@ -25,6 +26,10 @@ public sealed record UserPreferences
         {
             throw new ArgumentOutOfRangeException(nameof(RotationDegrees));
         }
+        if ((HeaderOverlayModeMask & ~0xFF) != 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(HeaderOverlayModeMask));
+        }
 
         this.CallSign = CallSign;
         this.Mode = Mode;
@@ -32,6 +37,7 @@ public sealed record UserPreferences
         this.AudioEndpointId = AudioEndpointId;
         this.StartAtSignIn = StartAtSignIn;
         this.RotationDegrees = RotationDegrees;
+        this.HeaderOverlayModeMask = HeaderOverlayModeMask;
     }
 
     public string CallSign { get; init; }
@@ -40,4 +46,5 @@ public sealed record UserPreferences
     public string? AudioEndpointId { get; init; }
     public bool StartAtSignIn { get; init; }
     public int RotationDegrees { get; init; }
+    public int HeaderOverlayModeMask { get; init; }
 }

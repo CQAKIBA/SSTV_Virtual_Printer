@@ -4,6 +4,7 @@ using SstvVPrinter.App.Audio;
 using SstvVPrinter.App.Jobs;
 using SstvVPrinter.App.Transmission;
 using SstvVPrinter.App.Validation;
+using SstvVPrinter.Imaging.Composition;
 using SstvVPrinter.Sstv;
 
 namespace SstvVPrinter.Desktop.ViewModels;
@@ -28,6 +29,7 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
 
     private SstvMode _selectedMode = SstvMode.Scottie2;
     private bool _isDoubleHorizontal;
+    private int _headerOverlayModeMask;
 
     [ObservableProperty]
     private int _rotationDegrees;
@@ -112,6 +114,7 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
             OnPropertyChanged(nameof(IsRadiofaxMode));
             OnPropertyChanged(nameof(IsHorizontalMultiplierEnabled));
             OnPropertyChanged(nameof(IsDoubleHorizontal));
+            OnPropertyChanged(nameof(IsHeaderOverlay));
         }
     }
     public bool IsDoubleHorizontal
@@ -125,6 +128,31 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
         }
     }
     public bool IsRadiofaxMode => TransmissionModes.IsRadiofax(SelectedMode);
+    public bool IsHeaderOverlay
+    {
+        get => (_headerOverlayModeMask & (1 << (int)SelectedMode)) != 0;
+        set
+        {
+            var bit = 1 << (int)SelectedMode;
+            var updated = value ? _headerOverlayModeMask | bit : _headerOverlayModeMask & ~bit;
+            if (updated == _headerOverlayModeMask) return;
+            _headerOverlayModeMask = updated;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HeaderOverlayModeMask));
+        }
+    }
+    public int HeaderOverlayModeMask
+    {
+        get => _headerOverlayModeMask;
+        set
+        {
+            if (!SetProperty(ref _headerOverlayModeMask, value)) return;
+            OnPropertyChanged(nameof(IsHeaderOverlay));
+        }
+    }
+    public HeaderPlacement SelectedHeaderPlacement => IsHeaderOverlay
+        ? HeaderPlacement.Overlay
+        : HeaderPlacement.ReserveSpace;
     public bool IsHorizontalMultiplierEnabled => !IsRadiofaxMode;
     public int StoredHorizontalSampleMultiplier => _isDoubleHorizontal ? 2 : 1;
     public bool IsPreviewEmpty => PreviewBitmap is null;

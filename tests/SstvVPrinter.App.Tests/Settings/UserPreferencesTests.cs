@@ -21,6 +21,7 @@ public sealed class UserPreferencesTests : IDisposable
         Assert.Null(result.AudioEndpointId);
         Assert.True(result.StartAtSignIn);
         Assert.Equal(0, result.RotationDegrees);
+        Assert.Equal(0, ReadHeaderOverlayModeMask(result));
     }
 
     [Fact]
@@ -48,6 +49,24 @@ public sealed class UserPreferencesTests : IDisposable
 
         Assert.Equal("JA1UMW", result.CallSign);
         Assert.Equal(0, result.RotationDegrees);
+    }
+
+    [Fact]
+    public async Task Header_overlay_mode_mask_survives_load_and_save()
+    {
+        var settingsDirectory = Path.Combine(_directory, "SstvVPrinter");
+        Directory.CreateDirectory(settingsDirectory);
+        var path = Path.Combine(settingsDirectory, "settings.json");
+        await File.WriteAllTextAsync(
+            path,
+            """{"CallSign":"JA1UMW","Mode":2,"HorizontalSampleMultiplier":1,"AudioEndpointId":null,"StartAtSignIn":true,"RotationDegrees":0,"HeaderOverlayModeMask":36}""");
+        var store = new JsonUserPreferencesStore(_directory);
+
+        var loaded = await store.LoadAsync();
+        await store.SaveAsync(loaded);
+
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(path));
+        Assert.Equal(36, document.RootElement.GetProperty("HeaderOverlayModeMask").GetInt32());
     }
 
     [Theory]
@@ -98,7 +117,7 @@ public sealed class UserPreferencesTests : IDisposable
         var settingsDirectory = Path.Combine(_directory, "SstvVPrinter");
         Assert.Empty(Directory.EnumerateFiles(settingsDirectory, "*.tmp"));
         using var document = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(settingsDirectory, "settings.json")));
-        Assert.Equal(6, document.RootElement.EnumerateObject().Count());
+        Assert.Equal(7, document.RootElement.EnumerateObject().Count());
         Assert.False(document.RootElement.TryGetProperty("Page", out _));
         Assert.False(document.RootElement.TryGetProperty("Jobs", out _));
     }
@@ -123,5 +142,12 @@ public sealed class UserPreferencesTests : IDisposable
         {
             Directory.Delete(_directory, recursive: true);
         }
+    }
+
+    private static int ReadHeaderOverlayModeMask(UserPreferences preferences)
+    {
+        var property = typeof(UserPreferences).GetProperty("HeaderOverlayModeMask");
+        Assert.NotNull(property);
+        return Assert.IsType<int>(property.GetValue(preferences));
     }
 }

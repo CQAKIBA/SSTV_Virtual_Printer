@@ -59,6 +59,7 @@ public sealed class DesktopComposition : IAsyncDisposable
             IsDoubleHorizontal = preferences.HorizontalSampleMultiplier == 2,
             RotationDegrees = preferences.RotationDegrees,
             StartAtSignIn = preferences.StartAtSignIn,
+            HeaderOverlayModeMask = preferences.HeaderOverlayModeMask,
         };
         IAudioEndpointMonitor audio = new WindowsAudioEndpointMonitor();
         var endpoints = await audio.GetEndpointsAsync(cancellationToken);
@@ -258,7 +259,8 @@ public sealed class DesktopComposition : IAsyncDisposable
 
     private UserPreferences CapturePreferences() => new(
         ViewModel.CallSign, ViewModel.SelectedMode, ViewModel.StoredHorizontalSampleMultiplier,
-        ViewModel.SelectedAudioEndpoint?.Id, ViewModel.StartAtSignIn, ViewModel.RotationDegrees);
+        ViewModel.SelectedAudioEndpoint?.Id, ViewModel.StartAtSignIn, ViewModel.RotationDegrees,
+        ViewModel.HeaderOverlayModeMask);
 
     private TimeSpan? Remaining() => ViewModel.Preview is { } preview
         ? TimeSpan.FromTicks((long)(preview.EstimatedDuration.Ticks * (1 - _transmission.Progress)))
@@ -311,7 +313,7 @@ public sealed class DesktopComposition : IAsyncDisposable
     {
         await ViewModel.UpdatePreviewAsync(selected, new TransmissionSettings(
             ViewModel.CallSign, ViewModel.SelectedMode, ViewModel.IsDoubleHorizontal ? 2 : 1,
-            ViewModel.RotationDegrees));
+            ViewModel.RotationDegrees, ViewModel.SelectedHeaderPlacement));
         if (ViewModel.IsReady) _preparedJobId = selected.Id;
     }
 

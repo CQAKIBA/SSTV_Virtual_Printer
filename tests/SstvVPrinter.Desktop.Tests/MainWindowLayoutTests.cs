@@ -87,5 +87,9 @@ public sealed class MainWindowLayoutTests
 
         Assert.Contains("TransmissionModeDisplayConverter", combo.ToString());
         Assert.Equal("{Binding IsHorizontalMultiplierEnabled}", checkbox.Attribute("IsEnabled")?.Value);
+        Assert.Contains(protocol.Descendants(), element =>
+            element.Name.LocalName == "CheckBox"
+            && element.Attribute("Content")?.Value == "ヘッダを画像に重ねる"
+            && element.Attribute("IsChecked")?.Value == "{Binding IsHeaderOverlay}");
     }
 }

@@ -36,8 +36,8 @@ public sealed class TransmissionPreparationServiceTests
     }
 
     [Theory]
-    [InlineData(SstvMode.Radiofax120Ioc288Sync20Ms, 864, 464)]
-    [InlineData(SstvMode.Radiofax120Ioc576Sync20Ms, 1728, 928)]
+    [InlineData(SstvMode.Radiofax120Ioc288Sync20Ms, 864, 432)]
+    [InlineData(SstvMode.Radiofax120Ioc576Sync20Ms, 1728, 864)]
     public async Task Prepare_produces_variable_height_grayscale_radiofax(
         SstvMode mode,
         int expectedWidth,
@@ -66,7 +66,7 @@ public sealed class TransmissionPreparationServiceTests
             new TransmissionSettings("JA1UMW", SstvMode.Radiofax120Ioc288Sync20Ms, 1, 90),
             CancellationToken.None);
 
-        Assert.Equal((864, 1760), (result.Frame.Width, result.Frame.Height));
+        Assert.Equal((864, 1728), (result.Frame.Width, result.Frame.Height));
     }
 
     [Fact]

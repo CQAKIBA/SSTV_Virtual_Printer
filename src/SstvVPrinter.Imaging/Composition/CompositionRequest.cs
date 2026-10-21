@@ -11,7 +11,7 @@ public sealed record CompositionRequest
         int horizontalSampleMultiplier,
         string callSign,
         DateTimeOffset acceptedAt,
-        HeaderPlacement placement = HeaderPlacement.Top)
+        HeaderPlacement placement = HeaderPlacement.ReserveSpace)
     {
         TransmissionModes.Validate(mode);
 
@@ -29,7 +29,7 @@ public sealed record CompositionRequest
             throw new ArgumentException("Call sign is empty or contains an unsupported character.", nameof(callSign));
         }
 
-        if (placement != HeaderPlacement.Top)
+        if (placement is not (HeaderPlacement.ReserveSpace or HeaderPlacement.Overlay))
         {
             throw new ArgumentOutOfRangeException(nameof(placement));
         }

@@ -34,6 +34,21 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public void Header_overlay_choice_is_remembered_independently_for_each_mode()
+    {
+        var viewModel = new MainWindowViewModel(new ControlledPreparationService());
+        var property = typeof(MainWindowViewModel).GetProperty("IsHeaderOverlay");
+        Assert.NotNull(property);
+
+        property.SetValue(viewModel, true);
+        viewModel.SelectedMode = SstvMode.Martin1;
+        Assert.False(Assert.IsType<bool>(property.GetValue(viewModel)));
+        property.SetValue(viewModel, true);
+        viewModel.SelectedMode = SstvMode.Scottie2;
+        Assert.True(Assert.IsType<bool>(property.GetValue(viewModel)));
+    }
+
+    [Fact]
     public async Task Recoverable_radiofax_validation_keeps_discard_and_settings_available()
     {
         var service = new ControlledPreparationService();

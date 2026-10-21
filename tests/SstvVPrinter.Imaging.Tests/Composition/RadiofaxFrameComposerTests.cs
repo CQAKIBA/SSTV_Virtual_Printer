@@ -21,8 +21,8 @@ public sealed class RadiofaxFrameComposerTests
 
         var expectedBodyHeight = (int)Math.Round(864.0 * height / width, MidpointRounding.AwayFromZero);
         Assert.Equal(864, frame.Width);
-        Assert.Equal(32 + expectedBodyHeight, frame.Height);
-        Assert.Equal(new Rgb24(77, 77, 77), frame.GetPixel(432, 32 + (expectedBodyHeight / 2)));
+        Assert.Equal(expectedBodyHeight, frame.Height);
+        Assert.Equal(new Rgb24(77, 77, 77), frame.GetPixel(432, 32 + ((expectedBodyHeight - 32) / 2)));
     }
 
     [Theory]
@@ -41,19 +41,30 @@ public sealed class RadiofaxFrameComposerTests
     }
 
     [Theory]
-    [InlineData(SstvMode.Radiofax120Ioc288Sync20Ms, 864, 32, 1728)]
-    [InlineData(SstvMode.Radiofax120Ioc576Sync20Ms, 1728, 64, 3456)]
+    [InlineData(SstvMode.Radiofax120Ioc288Sync20Ms, 864, 1728)]
+    [InlineData(SstvMode.Radiofax120Ioc576Sync20Ms, 1728, 3456)]
     public void Compose_uses_mode_width_header_and_maximum_body(
         SstvMode mode,
         int expectedWidth,
-        int headerHeight,
         int maximumBodyHeight)
     {
         var frame = new RadiofaxFrameComposer().Compose(SolidPage(1, 2, new(8, 8, 8)), Request(mode));
 
         Assert.Equal(expectedWidth, frame.Width);
-        Assert.Equal(headerHeight + maximumBodyHeight, frame.Height);
+        Assert.Equal(maximumBodyHeight, frame.Height);
         new TransmissionEncodeOptions(mode).Validate(frame);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public void Header_placement_never_extends_receiver_visible_page(int placement)
+    {
+        var frame = new RadiofaxFrameComposer().Compose(
+            SolidPage(210, 297, new(90, 90, 90)),
+            new(SstvMode.Radiofax120Ioc576Sync20Ms, 1, "JA1UMW", DateTimeOffset.UnixEpoch, (HeaderPlacement)placement));
+
+        Assert.Equal((int)Math.Round(1728.0 * 297 / 210, MidpointRounding.AwayFromZero), frame.Height);
     }
 
     [Fact]
@@ -79,7 +90,7 @@ public sealed class RadiofaxFrameComposerTests
             Request(SstvMode.Radiofax120Ioc288Sync20Ms));
 
         Assert.Equal((320, 256), (sstv.Width, sstv.Height));
-        Assert.Equal((864, 464), (fax.Width, fax.Height));
+        Assert.Equal((864, 432), (fax.Width, fax.Height));
     }
 
     private static CompositionRequest Request(SstvMode mode) =>
