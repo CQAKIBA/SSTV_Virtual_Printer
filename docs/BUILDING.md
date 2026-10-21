@@ -59,7 +59,7 @@ Accepted modes are `martin1`, `scottie1`, `scottie2`, `robot36`, `fax288`, and `
 
 - The local IPP / Microsoft IPP Class Driver path has accepted PWG Raster jobs on Windows 11 from Windows Explorer printing, Microsoft Paint, Adobe Acrobat Reader, Microsoft Excel, and PowerShell. Portrait and Acrobat landscape data were decoded after printer-orientation normalization.
 - Martin 1, Scottie 1, Scottie 2, and Robot 36 color-bar WAVs were recognized and displayed by an Android SSTV decoder in both 1x and 2x horizontal variants. This is useful interoperability evidence, not exhaustive receiver certification; 2x remains experimental.
-- Radiofax 120/288 and 120/576 generation follows the documented WMO start, phasing, image, stop, and trailer sequence. Automated timing and composition tests pass, but receiver and real-radio interoperability remain to be tested.
+- RadioFAX 120/288 and 120/576 generation follows the documented WMO start, phasing, image, stop, and trailer sequence, with selectable 10 ms or 20 ms line sync. Automated timing and composition tests pass; KG-FAX loopback synchronization has been verified, while real-radio interoperability remains to be tested.
 - The desktop UI, print queue, composition, audio preparation, and lifetime behavior have automated tests. Actual RF transmission, Windows 10, and ARM64 hardware still require external validation.
 
 ## Release process
