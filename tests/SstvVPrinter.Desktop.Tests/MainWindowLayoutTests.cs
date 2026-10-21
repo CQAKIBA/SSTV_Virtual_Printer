@@ -132,4 +132,19 @@ public sealed class MainWindowLayoutTests
         Assert.True(Array.IndexOf(children, checkbox) > Array.FindIndex(children, element => element.Name.LocalName == "Grid"));
         Assert.Equal("{Binding DeleteAfterSend}", checkbox.Attribute("IsChecked")?.Value);
     }
+
+    [Fact]
+    public void Preview_contains_red_transmission_line_bound_to_scan_position()
+    {
+        var path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "SstvVPrinter.Desktop", "Views", "MainWindow.axaml"));
+        var document = XDocument.Load(path);
+        var preview = document.Descendants().Single(element =>
+            element.Attribute("AutomationProperties.Name")?.Value == "SSTV preview");
+        var line = preview.Descendants().Single(element =>
+            element.Attribute("Name")?.Value == "TransmissionScanLine");
+
+        Assert.Equal("#FFFF3030", line.Attribute("Background")?.Value);
+        Assert.Equal("{Binding IsScanLineVisible}", line.Attribute("IsVisible")?.Value);
+        Assert.Contains("{Binding ScanLineY}", line.ToString());
+    }
 }

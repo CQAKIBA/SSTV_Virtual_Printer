@@ -31,7 +31,16 @@
       <Grid Grid.Column="0" RowDefinitions="*,Auto" RowSpacing="12">
         <Border AutomationProperties.Name="SSTV preview" Background="#080B10" BorderBrush="#00E5FF" BorderThickness="2" CornerRadius="8" Padding="12">
           <Grid>
-            <Image Source="{Binding PreviewBitmap}" Stretch="Uniform" />
+            <Viewbox Stretch="Uniform">
+              <Grid Width="{Binding PreviewWidth}" Height="{Binding PreviewHeight}">
+                <Image Source="{Binding PreviewBitmap}" Stretch="Fill" />
+                <Border Name="TransmissionScanLine" Height="2" Background="#FFFF3030" VerticalAlignment="Top" IsVisible="{Binding IsScanLineVisible}" IsHitTestVisible="False">
+                  <Border.RenderTransform>
+                    <TranslateTransform Y="{Binding ScanLineY}" />
+                  </Border.RenderTransform>
+                </Border>
+              </Grid>
+            </Viewbox>
             <TextBlock Text="印刷を待っています" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#697789" IsVisible="{Binding IsPreviewEmpty}" />
           </Grid>
         </Border>

@@ -336,6 +336,31 @@ public sealed class MainWindowViewModelTests
         Assert.Equal("APP VOLUME LOW", viewModel.MuteWarning);
     }
 
+    [Fact]
+    public async Task Radiofax_scan_line_is_visible_only_during_image_section()
+    {
+        var service = new ControlledPreparationService();
+        var viewModel = new MainWindowViewModel(service);
+        Task update = viewModel.UpdatePreviewAsync(
+            CreateJob(), new TransmissionSettings("JA1UMW", SstvMode.Radiofax120Ioc288Sync20Ms, 1));
+        service.Complete(0, 864, 432, TimeSpan.FromSeconds(266));
+        await update;
+        var visible = typeof(MainWindowViewModel).GetProperty("IsScanLineVisible");
+        var y = typeof(MainWindowViewModel).GetProperty("ScanLineY");
+        Assert.NotNull(visible);
+        Assert.NotNull(y);
+
+        viewModel.ApplyTransmissionState(JobState.Transmitting, 34.0 / 266, TimeSpan.FromSeconds(232));
+        Assert.False(Assert.IsType<bool>(visible.GetValue(viewModel)));
+
+        viewModel.ApplyTransmissionState(JobState.Transmitting, 143.0 / 266, TimeSpan.FromSeconds(123));
+        Assert.True(Assert.IsType<bool>(visible.GetValue(viewModel)));
+        Assert.InRange(Assert.IsType<double>(y.GetValue(viewModel)), 215, 216);
+
+        viewModel.ApplyTransmissionState(JobState.Transmitting, 251.0 / 266, TimeSpan.FromSeconds(15));
+        Assert.False(Assert.IsType<bool>(visible.GetValue(viewModel)));
+    }
+
     private static PrintJob CreateJob() =>
         new(
             Guid.NewGuid(), "Paint", DateTimeOffset.UtcNow,
@@ -358,7 +383,7 @@ public sealed class MainWindowViewModelTests
             return completion.Task;
         }
 
-        public void Complete(int index, int width, int height)
+        public void Complete(int index, int width, int height, TimeSpan? duration = null)
         {
             var request = Requests[index];
             var options = new TransmissionEncodeOptions(
@@ -366,7 +391,7 @@ public sealed class MainWindowViewModelTests
             request.Completion.SetResult(new(
                 RgbFrame.Create(width, height, new byte[width * height * 3]),
                 options,
-                TimeSpan.FromSeconds(72),
+                duration ?? TimeSpan.FromSeconds(72),
                 DateTimeOffset.UtcNow));
         }
 

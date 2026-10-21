@@ -80,6 +80,12 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
     private double _progressPercent;
 
     [ObservableProperty]
+    private bool _isScanLineVisible;
+
+    [ObservableProperty]
+    private double _scanLineY;
+
+    [ObservableProperty]
     private string? _remainingTimeText;
 
     [ObservableProperty]
@@ -159,6 +165,8 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
     public bool IsHorizontalMultiplierEnabled => !IsRadiofaxMode;
     public int StoredHorizontalSampleMultiplier => _isDoubleHorizontal ? 2 : 1;
     public bool IsPreviewEmpty => PreviewBitmap is null;
+    public double PreviewWidth => Preview?.Frame.Width ?? 1;
+    public double PreviewHeight => Preview?.Frame.Height ?? 1;
     public bool CanSend => IsReady && IsSelectedJobActive && !IsSettingsLocked && SelectedAudioEndpoint?.IsAvailable is true;
     public bool CanSaveWave => IsReady && IsSelectedJobActive && !IsSettingsLocked;
     public bool CanDiscard => (Preview is not null || SelectedJob is not null) && !IsSettingsLocked;
@@ -269,10 +277,16 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
             _ => "#344050",
         };
         RemainingTimeText = null;
+        UpdateScanLine(state, progress);
         RefreshAudioDisplay();
         NotifyActionState();
     }
 
+    partial void OnPreviewChanged(PreparedTransmission? value)
+    {
+        OnPropertyChanged(nameof(PreviewWidth));
+        OnPropertyChanged(nameof(PreviewHeight));
+    }
     partial void OnPreviewBitmapChanged(Bitmap? value) => OnPropertyChanged(nameof(IsPreviewEmpty));
     partial void OnRotationDegreesChanged(int value) => OnPropertyChanged(nameof(RotationText));
     partial void OnSelectedAudioEndpointChanged(AudioEndpointInfo? value)
@@ -288,6 +302,31 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
         OnPropertyChanged(nameof(CanSend));
         OnPropertyChanged(nameof(CanSaveWave));
         OnPropertyChanged(nameof(CanDiscard));
+    }
+
+    private void UpdateScanLine(JobState state, double progress)
+    {
+        if (state != JobState.Transmitting || Preview is not { } preview)
+        {
+            IsScanLineVisible = false;
+            return;
+        }
+
+        var totalSeconds = preview.EstimatedDuration.TotalSeconds;
+        var imageStartSeconds = TransmissionModes.IsRadiofax(preview.Options.Mode) ? 35.0 : 0.910;
+        var imageEndSeconds = TransmissionModes.IsRadiofax(preview.Options.Mode)
+            ? totalSeconds - 15.0
+            : totalSeconds;
+        var elapsedSeconds = Math.Clamp(progress, 0, 1) * totalSeconds;
+        if (imageEndSeconds <= imageStartSeconds || elapsedSeconds < imageStartSeconds || elapsedSeconds >= imageEndSeconds)
+        {
+            IsScanLineVisible = false;
+            return;
+        }
+
+        var imageProgress = (elapsedSeconds - imageStartSeconds) / (imageEndSeconds - imageStartSeconds);
+        ScanLineY = imageProgress * Math.Max(0, preview.Frame.Height - 1);
+        IsScanLineVisible = true;
     }
 
     public void RefreshAudioDisplay()
