@@ -46,15 +46,16 @@ public sealed class TransmissionController(
             ResetProgress();
             temporaryPath = await artifacts.CreateTemporaryAsync(
                 prepared,
-                new InlineProgress(value => SetProgress(value * 0.2)),
+                new InlineProgress(SetProgress),
                 linked.Token);
             linked.Token.ThrowIfCancellationRequested();
             SetState(JobState.Transmitting);
+            ResetProgress();
             temporaryPath = Path.GetFullPath(temporaryPath);
             await playback.PlayAsync(
                 temporaryPath,
                 endpointId,
-                new InlineProgress(value => SetProgress(0.2 + (value * 0.8))),
+                new InlineProgress(SetProgress),
                 linked.Token);
             SetProgress(1);
             SetState(JobState.Completed);

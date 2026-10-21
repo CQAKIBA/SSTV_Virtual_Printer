@@ -211,7 +211,7 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
-    public void Transmitting_locks_settings_and_exposes_stop_and_remaining_time()
+    public void Transmitting_locks_settings_and_combines_remaining_time_with_percentage()
     {
         var viewModel = new MainWindowViewModel(new ControlledPreparationService());
 
@@ -220,8 +220,29 @@ public sealed class MainWindowViewModelTests
         Assert.True(viewModel.IsSettingsLocked);
         Assert.True(viewModel.CanStop);
         Assert.False(viewModel.CanSend);
-        Assert.Equal("送信中", viewModel.StatusText);
-        Assert.Equal("残り 01:30", viewModel.RemainingTimeText);
+        Assert.Equal("送信中 残り01:30 (25.0%)", viewModel.StatusText);
+        Assert.Null(viewModel.RemainingTimeText);
+    }
+
+    [Fact]
+    public async Task Stopping_transmission_keeps_prepared_job_ready_for_send_and_wave_save()
+    {
+        var service = new ControlledPreparationService();
+        var viewModel = new MainWindowViewModel(service)
+        {
+            SelectedAudioEndpoint = new AudioEndpointInfo("test", "Test", true, 50, false),
+        };
+        Task update = viewModel.UpdatePreviewAsync(CreateJob(), new TransmissionSettings("JA1UMW", SstvMode.Scottie2, 1));
+        service.Complete(0, 320, 256);
+        await update;
+        viewModel.ApplyTransmissionState(JobState.Transmitting, 0.25, TimeSpan.FromSeconds(90));
+
+        viewModel.CancelPreparation();
+        viewModel.ApplyTransmissionState(JobState.Stopped, 0, null);
+
+        Assert.True(viewModel.IsReady);
+        Assert.True(viewModel.CanSend);
+        Assert.True(viewModel.CanSaveWave);
     }
 
     [Fact]

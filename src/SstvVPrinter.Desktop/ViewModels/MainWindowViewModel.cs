@@ -193,6 +193,7 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
     public void CancelPreparation()
     {
         _preparationCancellation?.Cancel();
+        if (IsSettingsLocked) return;
         IsReady = false;
         ApplyTransmissionState(JobState.Stopped, 0, null);
     }
@@ -219,7 +220,9 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
         {
             JobState.Encoding => "信号生成中",
             JobState.Preparing => "プレビュー生成中",
-            JobState.Transmitting => "送信中",
+            JobState.Transmitting when remaining is { } value =>
+                $"送信中 残り{(int)value.TotalMinutes:00}:{value.Seconds:00} ({Math.Clamp(progress, 0, 1) * 100:0.0}%)",
+            JobState.Transmitting => $"送信中 ({Math.Clamp(progress, 0, 1) * 100:0.0}%)",
             JobState.Ready => "送信準備完了",
             JobState.Completed => "送信完了",
             JobState.Failed => "エラー",
@@ -234,9 +237,7 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
             JobState.Ready or JobState.Completed => "#80FF3D",
             _ => "#344050",
         };
-        RemainingTimeText = remaining is { } value
-            ? $"残り {(int)value.TotalMinutes:00}:{value.Seconds:00}"
-            : null;
+        RemainingTimeText = null;
         RefreshAudioDisplay();
         NotifyActionState();
     }

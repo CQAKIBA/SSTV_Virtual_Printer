@@ -22,21 +22,22 @@ public sealed class TransmissionControllerTests : IDisposable
     }
 
     [Fact]
-    public async Task Send_transitions_encoding_transmitting_completed_and_reports_monotonic_progress()
+    public async Task Send_resets_progress_between_encoding_and_playback()
     {
         var artifacts = new FakeArtifacts(_directory);
         var playback = new FakePlayback();
         var controller = new TransmissionController(artifacts, playback);
         var states = new List<JobState>();
-        var progress = new List<double>();
+        var progress = new List<(JobState State, double Value)>();
         controller.StateChanged += states.Add;
-        controller.ProgressChanged += progress.Add;
+        controller.ProgressChanged += value => progress.Add((controller.State, value));
 
         await controller.SendAsync(CreatePrepared(), "endpoint", CancellationToken.None);
 
         Assert.Equal([JobState.Encoding, JobState.Transmitting, JobState.Completed], states);
-        Assert.Equal(progress.OrderBy(value => value), progress);
-        Assert.All(progress, value => Assert.InRange(value, 0, 1));
+        Assert.Equal([0, 0.5, 1], progress.Where(item => item.State == JobState.Encoding).Select(item => item.Value).Distinct());
+        Assert.Equal([0, 0.5, 1], progress.Where(item => item.State == JobState.Transmitting).Select(item => item.Value).Distinct());
+        Assert.All(progress, item => Assert.InRange(item.Value, 0, 1));
         Assert.False(File.Exists(artifacts.TemporaryPath));
     }
 
