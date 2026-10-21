@@ -114,6 +114,10 @@ public sealed class MainWindowLayoutTests
         Assert.Contains("{Binding AcceptedAt", list.ToString());
         Assert.Contains("{Binding SourceName}", list.ToString());
         Assert.Contains("{Binding Id}", list.ToString());
+        Assert.Contains(list.Descendants(), element =>
+            element.Name.LocalName == "Setter"
+            && element.Attribute("Property")?.Value == "HorizontalContentAlignment"
+            && element.Attribute("Value")?.Value == "Stretch");
     }
 
     [Fact]

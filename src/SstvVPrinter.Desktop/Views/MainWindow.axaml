@@ -53,6 +53,11 @@
               <TextBlock Grid.Column="2" Text="UUID" FontWeight="Bold" />
             </Grid>
             <ListBox ItemsSource="{Binding WaitingJobs}" SelectedItem="{Binding SelectedJob}" MinHeight="72" MaxHeight="128">
+              <ListBox.Styles>
+                <Style Selector="ListBoxItem">
+                  <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                </Style>
+              </ListBox.Styles>
               <ListBox.ItemTemplate>
                 <DataTemplate>
                   <Grid ColumnDefinitions="150,*,250" ColumnSpacing="10">
