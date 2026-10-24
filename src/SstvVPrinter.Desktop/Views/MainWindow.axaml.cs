@@ -19,6 +19,7 @@ public sealed partial class MainWindow : Window
     private bool _manualPttHeld;
     private Key? _manualPttKey;
     private IPointer? _manualPttPointer;
+    private long _manualPttGeneration;
     public MainWindow()
     {
         AvaloniaXamlLoader.Load(this);
@@ -80,7 +81,7 @@ public sealed partial class MainWindow : Window
         _manualPttHeld = true;
         _manualPttPointer = args.Pointer;
         args.Pointer.Capture(button);
-        if (ManualPttPressed is not null) await ManualPttPressed();
+        await BeginManualPttAsync();
     }
 
     private async void OnPttPointerReleased(object? sender, PointerReleasedEventArgs args)
@@ -100,7 +101,21 @@ public sealed partial class MainWindow : Window
         if (_manualPttHeld || sender is not Button { IsEffectivelyEnabled: true }) return;
         _manualPttHeld = true;
         _manualPttKey = args.Key;
-        if (ManualPttPressed is not null) await ManualPttPressed();
+        await BeginManualPttAsync();
+    }
+
+    private async Task BeginManualPttAsync()
+    {
+        var generation = ++_manualPttGeneration;
+        try
+        {
+            if (ManualPttPressed is not null) await ManualPttPressed();
+        }
+        catch (Exception)
+        {
+            // The delegate owns error reporting; failed/canceled presses still relinquish input.
+            if (generation == _manualPttGeneration) await ReleaseManualPttAsync();
+        }
     }
 
     private async void OnPttKeyUp(object? sender, KeyEventArgs args)

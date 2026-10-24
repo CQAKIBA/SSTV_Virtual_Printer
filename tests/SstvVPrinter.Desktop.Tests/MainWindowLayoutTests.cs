@@ -1,15 +1,119 @@
 using System.Xml.Linq;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using SstvVPrinter.Desktop.Views;
 
 namespace SstvVPrinter.Desktop.Tests;
 
 public sealed class MainWindowLayoutTests
 {
+    [AvaloniaTheory]
+    [InlineData("PttConnectionButton")]
+    [InlineData("PttButton")]
+    public void Ptt_red_state_remains_rendered_when_hovered_and_disabled(string buttonName)
+    {
+        var window = new MainWindow { AllowExplicitClose = true };
+        window.Show();
+        try
+        {
+            var button = window.FindControl<Button>(buttonName)!;
+            button.Background = Brush.Parse("#FF3D21");
+            var presenter = button.GetVisualDescendants().OfType<ContentPresenter>()
+                .Single(control => control.Name == "PART_ContentPresenter");
+            var center = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), window)!.Value;
+            window.MouseMove(center);
+            Assert.True(button.IsPointerOver);
+            Assert.Equal(Color.Parse("#FF3D21"), Assert.IsAssignableFrom<ISolidColorBrush>(presenter.Background).Color);
+
+            button.IsEnabled = false;
+            Assert.False(button.IsEffectivelyEnabled);
+            Assert.Equal(Color.Parse("#FF3D21"), Assert.IsAssignableFrom<ISolidColorBrush>(presenter.Background).Color);
+            window.MouseMove(default);
+            Assert.Equal(Color.Parse("#FF3D21"), Assert.IsAssignableFrom<ISolidColorBrush>(presenter.Background).Color);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Failed_ptt_press_releases_once_and_clears_input_ownership(bool pointerInput, bool canceled)
+    {
+        var window = new MainWindow();
+        var button = window.FindControl<Button>("PttButton")!;
+        var pointer = new Pointer(1, PointerType.Mouse, true);
+        var presses = 0;
+        var releases = 0;
+        var unhandled = new List<Exception>();
+        void OnUnhandled(object? sender, DispatcherUnhandledExceptionEventArgs args)
+        {
+            unhandled.Add(args.Exception);
+            args.Handled = true;
+        }
+        Dispatcher.UIThread.UnhandledException += OnUnhandled;
+        window.ManualPttPressed = () =>
+        {
+            presses++;
+            return canceled ? Task.FromCanceled(new CancellationToken(true)) : Task.FromException(new IOException("PTT failed"));
+        };
+        window.ManualPttReleased = () => { releases++; return Task.CompletedTask; };
+        void Press()
+        {
+            if (pointerInput)
+                button.RaiseEvent(new PointerPressedEventArgs(button, pointer, button, default, 0,
+                    new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None, 1));
+            else
+                button.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Space });
+        }
+        try
+        {
+            Press();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, releases);
+            Assert.Null(pointer.Captured);
+            button.RaiseEvent(new RoutedEventArgs(InputElement.LostFocusEvent));
+            Assert.Equal(1, releases);
+            Press();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(2, presses);
+            Assert.Equal(2, releases);
+            Assert.Null(pointer.Captured);
+            Assert.Empty(unhandled);
+        }
+        finally { Dispatcher.UIThread.UnhandledException -= OnUnhandled; }
+    }
+
+    [AvaloniaFact]
+    public void Failure_from_a_released_press_does_not_release_a_newer_hold()
+    {
+        var window = new MainWindow();
+        var button = window.FindControl<Button>("PttButton")!;
+        var firstPress = new TaskCompletionSource();
+        var presses = 0;
+        var releases = 0;
+        window.ManualPttPressed = () => ++presses == 1 ? firstPress.Task : Task.CompletedTask;
+        window.ManualPttReleased = () => { releases++; return Task.CompletedTask; };
+
+        button.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Space });
+        button.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyUpEvent, Key = Key.Space });
+        button.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Space });
+        firstPress.SetException(new IOException("Previous press failed late"));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, releases);
+        button.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyUpEvent, Key = Key.Space });
+        Assert.Equal(2, releases);
+    }
+
     [Fact]
     public void Hardware_exposes_ptt_controls_and_locks_only_editable_subgroups()
     {

@@ -86,13 +86,13 @@
               <TextBlock Text="PTT PORT" Classes="heading" Margin="0,6,0,0"/>
               <Grid ColumnDefinitions="*,90" ColumnSpacing="8">
                 <ComboBox Name="PttPortComboBox" ItemsSource="{Binding PttPorts}" SelectedItem="{Binding SelectedPttPort}" IsEnabled="{Binding CanEditPttSettings}" HorizontalAlignment="Stretch" DropDownOpened="OnPttPortDropDownOpened"/>
-                <Button Name="PttConnectionButton" Grid.Column="1" Content="{Binding PttConnectionButtonText}" Background="{Binding PttConnectionBrush}" IsEnabled="{Binding CanTogglePttConnection}" HorizontalContentAlignment="Center" Click="OnPttOpenCloseClick"/>
+                <Button Name="PttConnectionButton" Classes="ptt-state" Grid.Column="1" Content="{Binding PttConnectionButtonText}" Background="{Binding PttConnectionBrush}" IsEnabled="{Binding CanTogglePttConnection}" HorizontalContentAlignment="Center" Click="OnPttOpenCloseClick"/>
               </Grid>
               <Grid ColumnDefinitions="*,90" ColumnSpacing="8">
                 <ComboBox ItemsSource="{Binding PttMethods}" SelectedItem="{Binding SelectedPttMethod}" IsEnabled="{Binding CanEditPttSettings}" HorizontalAlignment="Stretch">
                   <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Converter={x:Static views:MainWindow.PttMethodDisplayConverter}}"/></DataTemplate></ComboBox.ItemTemplate>
                 </ComboBox>
-                <Button Name="PttButton" Grid.Column="1" Content="PTT" Background="{Binding PttButtonBrush}" IsEnabled="{Binding CanPressPtt}" HorizontalContentAlignment="Center" PointerPressed="OnPttPointerPressed" PointerReleased="OnPttPointerReleased" PointerCaptureLost="OnPttPointerCaptureLost" KeyDown="OnPttKeyDown" KeyUp="OnPttKeyUp" LostFocus="OnPttLostFocus"/>
+                <Button Name="PttButton" Classes="ptt-state" Grid.Column="1" Content="PTT" Background="{Binding PttButtonBrush}" IsEnabled="{Binding CanPressPtt}" HorizontalContentAlignment="Center" PointerPressed="OnPttPointerPressed" PointerReleased="OnPttPointerReleased" PointerCaptureLost="OnPttPointerCaptureLost" KeyDown="OnPttKeyDown" KeyUp="OnPttKeyUp" LostFocus="OnPttLostFocus"/>
               </Grid>
             </StackPanel>
           </Border>
@@ -104,6 +104,9 @@
     </Grid>
   </Grid>
   <Window.Styles>
+    <Style Selector="Button.ptt-state:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.ptt-state:pressed /template/ ContentPresenter#PART_ContentPresenter, Button.ptt-state:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{Binding Background, RelativeSource={RelativeSource TemplatedParent}}"/>
+    </Style>
     <Style Selector="Border.panel"><Setter Property="Background" Value="#171E28"/><Setter Property="BorderBrush" Value="#344050"/><Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="8"/><Setter Property="Padding" Value="14"/></Style>
     <Style Selector="TextBlock.heading"><Setter Property="Foreground" Value="#00E5FF"/><Setter Property="FontWeight" Value="Bold"/></Style>
     <Style Selector="Button.send"><Setter Property="Background" Value="#00E5FF"/><Setter Property="Foreground" Value="#061014"/><Setter Property="FontWeight" Value="Bold"/></Style>
