@@ -26,6 +26,49 @@ public sealed class UserPreferencesTests : IDisposable
     }
 
     [Fact]
+    public void Defaults_to_no_ptt_and_rts()
+    {
+        Assert.Null(UserPreferences.Default.PttPortName);
+        Assert.Equal("RTS", UserPreferences.Default.PttMethod);
+    }
+
+    [Fact]
+    public async Task Round_trip_preserves_ptt_port_and_method()
+    {
+        var store = new JsonUserPreferencesStore(_directory);
+        var expected = new UserPreferences(
+            "JA1UMW", SstvMode.Scottie2, 1, null, true, PttPortName: "COM7", PttMethod: "DTR");
+
+        await store.SaveAsync(expected);
+        var actual = await store.LoadAsync();
+
+        Assert.Equal("COM7", actual.PttPortName);
+        Assert.Equal("DTR", actual.PttMethod);
+    }
+
+    [Fact]
+    public async Task Old_json_without_ptt_fields_loads_defaults()
+    {
+        var settingsDirectory = Path.Combine(_directory, "SstvVPrinter");
+        Directory.CreateDirectory(settingsDirectory);
+        await File.WriteAllTextAsync(
+            Path.Combine(settingsDirectory, "settings.json"),
+            """{"CallSign":"JA1UMW","Mode":2,"HorizontalSampleMultiplier":1,"AudioEndpointId":null,"StartAtSignIn":true}""");
+
+        var result = await new JsonUserPreferencesStore(_directory).LoadAsync();
+
+        Assert.Null(result.PttPortName);
+        Assert.Equal("RTS", result.PttMethod);
+    }
+
+    [Theory]
+    [InlineData("rts")]
+    [InlineData("CTS")]
+    public void Preferences_reject_unsupported_ptt_methods(string pttMethod) =>
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new UserPreferences("JA1UMW", SstvMode.Scottie2, 1, null, true, PttMethod: pttMethod));
+
+    [Fact]
     public async Task Corrupt_json_returns_safe_defaults()
     {
         Directory.CreateDirectory(Path.Combine(_directory, "SstvVPrinter"));
@@ -118,7 +161,7 @@ public sealed class UserPreferencesTests : IDisposable
         var settingsDirectory = Path.Combine(_directory, "SstvVPrinter");
         Assert.Empty(Directory.EnumerateFiles(settingsDirectory, "*.tmp"));
         using var document = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(settingsDirectory, "settings.json")));
-        Assert.Equal(8, document.RootElement.EnumerateObject().Count());
+        Assert.Equal(10, document.RootElement.EnumerateObject().Count());
         Assert.False(document.RootElement.TryGetProperty("Page", out _));
         Assert.False(document.RootElement.TryGetProperty("Jobs", out _));
     }

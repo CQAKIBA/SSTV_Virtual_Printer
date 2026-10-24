@@ -15,7 +15,9 @@ public sealed record UserPreferences
         bool StartAtSignIn,
         int RotationDegrees = 0,
         int HeaderOverlayModeMask = 0,
-        bool DeleteAfterSend = false)
+        bool DeleteAfterSend = false,
+        string? PttPortName = null,
+        string PttMethod = "RTS")
     {
         ArgumentNullException.ThrowIfNull(CallSign);
         TransmissionModes.Validate(Mode);
@@ -31,6 +33,10 @@ public sealed record UserPreferences
         {
             throw new ArgumentOutOfRangeException(nameof(HeaderOverlayModeMask));
         }
+        if (PttMethod is not ("RTS" or "DTR"))
+        {
+            throw new ArgumentOutOfRangeException(nameof(PttMethod));
+        }
 
         this.CallSign = CallSign;
         this.Mode = Mode;
@@ -40,6 +46,8 @@ public sealed record UserPreferences
         this.RotationDegrees = RotationDegrees;
         this.HeaderOverlayModeMask = HeaderOverlayModeMask;
         this.DeleteAfterSend = DeleteAfterSend;
+        this.PttPortName = PttPortName;
+        this.PttMethod = PttMethod;
     }
 
     public string CallSign { get; init; }
@@ -50,4 +58,6 @@ public sealed record UserPreferences
     public int RotationDegrees { get; init; }
     public int HeaderOverlayModeMask { get; init; }
     public bool DeleteAfterSend { get; init; }
+    public string? PttPortName { get; init; }
+    public string PttMethod { get; init; }
 }
