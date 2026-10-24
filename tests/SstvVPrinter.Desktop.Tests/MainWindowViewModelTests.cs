@@ -2,6 +2,7 @@ using SstvVPrinter.App.Jobs;
 using SstvVPrinter.App.Audio;
 using SstvVPrinter.App.Transmission;
 using SstvVPrinter.Desktop.ViewModels;
+using SstvVPrinter.Desktop.Ptt;
 using SstvVPrinter.Imaging.Model;
 using SstvVPrinter.Sstv;
 
@@ -9,6 +10,85 @@ namespace SstvVPrinter.Desktop.Tests;
 
 public sealed class MainWindowViewModelTests
 {
+    [Fact]
+    public void Ptt_requires_a_selected_port_and_keeps_closed_selection_separate_from_snapshot()
+    {
+        var viewModel = new MainWindowViewModel(new ControlledPreparationService());
+
+        Assert.Equal(["N/A"], viewModel.PttPorts);
+        Assert.Equal("N/A", viewModel.SelectedPttPort);
+        Assert.False(viewModel.CanTogglePttConnection);
+        Assert.False(viewModel.CanPressPtt);
+        Assert.Equal([PttControlMethod.Rts, PttControlMethod.Dtr], viewModel.PttMethods);
+        viewModel.SelectedPttPort = "COM4";
+        viewModel.SelectedPttMethod = PttControlMethod.Dtr;
+        viewModel.ApplyPttSnapshot(new(null, PttControlMethod.Rts, false, false, false, null));
+
+        Assert.Equal("COM4", viewModel.SelectedPttPort);
+        Assert.Equal(PttControlMethod.Dtr, viewModel.SelectedPttMethod);
+        Assert.Equal("OPEN", viewModel.PttConnectionButtonText);
+        Assert.Equal("#344050", viewModel.PttConnectionBrush);
+        Assert.True(viewModel.CanTogglePttConnection);
+        Assert.True(viewModel.CanPressPtt);
+        Assert.True(viewModel.CanEditPttSettings);
+    }
+
+    [Fact]
+    public void Ptt_snapshot_updates_connection_assertion_and_every_dependent_binding()
+    {
+        var viewModel = new MainWindowViewModel(new ControlledPreparationService()) { SelectedPttPort = "COM4" };
+        var notified = new List<string?>();
+        viewModel.PropertyChanged += (_, args) => notified.Add(args.PropertyName);
+
+        viewModel.ApplyPttSnapshot(new("COM4", PttControlMethod.Rts, true, true, false, null));
+
+        Assert.True(viewModel.IsPttOpen);
+        Assert.True(viewModel.IsPttAsserted);
+        Assert.False(viewModel.IsPttBusy);
+        Assert.Equal("CLOSE", viewModel.PttConnectionButtonText);
+        Assert.Equal("#FF3D21", viewModel.PttConnectionBrush);
+        Assert.Equal("#FF3D21", viewModel.PttButtonBrush);
+        Assert.False(viewModel.CanEditPttSettings);
+        Assert.False(viewModel.CanTogglePttConnection);
+        foreach (var name in new[] { "PttConnectionButtonText", "PttConnectionBrush", "PttButtonBrush", "CanEditPttSettings", "CanTogglePttConnection", "CanPressPtt" })
+            Assert.Contains(name, notified);
+    }
+
+    [Fact]
+    public void Sending_locks_ptt_controls_while_preserving_visible_connection_state()
+    {
+        var viewModel = new MainWindowViewModel(new ControlledPreparationService()) { SelectedPttPort = "COM4" };
+        viewModel.ApplyPttSnapshot(new("COM4", PttControlMethod.Rts, true, false, false, null));
+        Assert.True(viewModel.CanTogglePttConnection);
+        Assert.True(viewModel.CanPressPtt);
+
+        viewModel.ApplyTransmissionState(JobState.Transmitting, 0, null);
+
+        Assert.True(viewModel.IsPttOpen);
+        Assert.Equal("CLOSE", viewModel.PttConnectionButtonText);
+        Assert.Equal("#FF3D21", viewModel.PttConnectionBrush);
+        Assert.False(viewModel.CanEditPttSettings);
+        Assert.False(viewModel.CanTogglePttConnection);
+        Assert.False(viewModel.CanPressPtt);
+        viewModel.ApplyTransmissionState(JobState.Stopped, 0, null);
+        Assert.True(viewModel.CanTogglePttConnection);
+        Assert.True(viewModel.CanPressPtt);
+    }
+
+    [Fact]
+    public void Automatic_ptt_busy_disables_close_and_manual_ptt_without_hiding_assertion()
+    {
+        var viewModel = new MainWindowViewModel(new ControlledPreparationService()) { SelectedPttPort = "COM4" };
+
+        viewModel.ApplyPttSnapshot(new("COM4", PttControlMethod.Rts, true, true, true, null));
+
+        Assert.True(viewModel.IsPttBusy);
+        Assert.Equal("#FF3D21", viewModel.PttButtonBrush);
+        Assert.False(viewModel.CanTogglePttConnection);
+        Assert.False(viewModel.CanPressPtt);
+        Assert.False(viewModel.CanEditPttSettings);
+    }
+
     [Fact]
     public void Radiofax_modes_follow_existing_sstv_modes_and_force_effective_one_x()
     {

@@ -4,6 +4,7 @@ using SstvVPrinter.App.Audio;
 using SstvVPrinter.App.Jobs;
 using SstvVPrinter.App.Transmission;
 using SstvVPrinter.App.Validation;
+using SstvVPrinter.Desktop.Ptt;
 using SstvVPrinter.Imaging.Composition;
 using SstvVPrinter.Sstv;
 
@@ -92,6 +93,24 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
     private bool _isSettingsLocked;
 
     [ObservableProperty]
+    private IReadOnlyList<string> _pttPorts = ["N/A"];
+
+    [ObservableProperty]
+    private string? _selectedPttPort = "N/A";
+
+    [ObservableProperty]
+    private PttControlMethod _selectedPttMethod = PttControlMethod.Rts;
+
+    [ObservableProperty]
+    private bool _isPttOpen;
+
+    [ObservableProperty]
+    private bool _isPttAsserted;
+
+    [ObservableProperty]
+    private bool _isPttBusy;
+
+    [ObservableProperty]
     private bool _canStop;
 
     [ObservableProperty]
@@ -171,6 +190,24 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
     public bool CanSaveWave => IsReady && IsSelectedJobActive && !IsSettingsLocked;
     public bool CanDiscard => (Preview is not null || SelectedJob is not null) && !IsSettingsLocked;
     public string RotationText => $"{RotationDegrees}°";
+    public IReadOnlyList<PttControlMethod> PttMethods { get; } = [PttControlMethod.Rts, PttControlMethod.Dtr];
+    public string PttConnectionButtonText => IsPttOpen ? "CLOSE" : "OPEN";
+    public string PttConnectionBrush => IsPttOpen ? "#FF3D21" : "#344050";
+    public string PttButtonBrush => IsPttAsserted ? "#FF3D21" : "#344050";
+    public bool CanEditPttSettings => !IsSettingsLocked && !IsPttOpen && !IsPttAsserted && !IsPttBusy;
+    public bool CanTogglePttConnection => !IsSettingsLocked && !IsPttBusy && !IsPttAsserted && (IsPttOpen || HasPttPort);
+    public bool CanPressPtt => !IsSettingsLocked && !IsPttBusy && HasPttPort;
+    private bool HasPttPort => !string.IsNullOrWhiteSpace(SelectedPttPort)
+        && !string.Equals(SelectedPttPort, "N/A", StringComparison.OrdinalIgnoreCase);
+
+    public void ApplyPttSnapshot(PttSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        IsPttOpen = snapshot.IsOpen;
+        IsPttAsserted = snapshot.IsAsserted;
+        IsPttBusy = snapshot.IsBusy;
+        NotifyPttState();
+    }
 
     public void RotateClockwise() => RotationDegrees = (RotationDegrees + 90) % 360;
     public void RotateCounterclockwise() => RotationDegrees = (RotationDegrees + 270) % 360;
@@ -296,6 +333,18 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
     }
     partial void OnIsSelectedJobActiveChanged(bool value) => NotifyActionState();
     partial void OnSelectedJobChanged(PrintJob? value) => NotifyActionState();
+    partial void OnSelectedPttPortChanged(string? value) => NotifyPttState();
+    partial void OnIsSettingsLockedChanged(bool value) => NotifyPttState();
+
+    private void NotifyPttState()
+    {
+        OnPropertyChanged(nameof(PttConnectionButtonText));
+        OnPropertyChanged(nameof(PttConnectionBrush));
+        OnPropertyChanged(nameof(PttButtonBrush));
+        OnPropertyChanged(nameof(CanEditPttSettings));
+        OnPropertyChanged(nameof(CanTogglePttConnection));
+        OnPropertyChanged(nameof(CanPressPtt));
+    }
 
     private void NotifyActionState()
     {

@@ -1,9 +1,138 @@
 using System.Xml.Linq;
+using Avalonia.Controls;
+using Avalonia.Headless.XUnit;
+using Avalonia.Input;
+using Avalonia;
+using Avalonia.Interactivity;
+using SstvVPrinter.Desktop.Views;
 
 namespace SstvVPrinter.Desktop.Tests;
 
 public sealed class MainWindowLayoutTests
 {
+    [Fact]
+    public void Hardware_exposes_ptt_controls_and_locks_only_editable_subgroups()
+    {
+        var path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "SstvVPrinter.Desktop", "Views", "MainWindow.axaml"));
+        var hardware = XDocument.Load(path).Descendants().Single(element => element.Attribute("AutomationProperties.Name")?.Value == "Hardware");
+        Assert.Null(hardware.Attribute("IsEnabled"));
+        Assert.Contains(hardware.Descendants(), element => element.Attribute("Text")?.Value == "PTT PORT");
+        var port = hardware.Descendants().Single(element => element.Attribute("Name")?.Value == "PttPortComboBox");
+        Assert.Equal("OnPttPortDropDownOpened", port.Attribute("DropDownOpened")?.Value);
+        Assert.Null(port.Attribute("SelectionChanged"));
+        Assert.Null(port.Attribute("KeyDown"));
+        Assert.Equal("{Binding CanEditPttSettings}", port.Attribute("IsEnabled")?.Value);
+        var audio = hardware.Descendants().Single(element => element.Attribute("ItemsSource")?.Value == "{Binding AudioEndpoints}");
+        Assert.Equal("{Binding !IsSettingsLocked}", audio.Attribute("IsEnabled")?.Value);
+        var method = hardware.Descendants().Single(element => element.Attribute("ItemsSource")?.Value == "{Binding PttMethods}");
+        Assert.Equal("{Binding CanEditPttSettings}", method.Attribute("IsEnabled")?.Value);
+        var connection = hardware.Descendants().Single(element => element.Attribute("Name")?.Value == "PttConnectionButton");
+        Assert.Equal("OnPttOpenCloseClick", connection.Attribute("Click")?.Value);
+        Assert.Equal("{Binding CanTogglePttConnection}", connection.Attribute("IsEnabled")?.Value);
+        var ptt = hardware.Descendants().Single(element => element.Attribute("Name")?.Value == "PttButton");
+        foreach (var (name, handler) in new[] { ("PointerPressed", "OnPttPointerPressed"), ("PointerReleased", "OnPttPointerReleased"), ("PointerCaptureLost", "OnPttPointerCaptureLost"), ("KeyDown", "OnPttKeyDown"), ("KeyUp", "OnPttKeyUp"), ("LostFocus", "OnPttLostFocus") })
+            Assert.Equal(handler, ptt.Attribute(name)?.Value);
+        Assert.Equal("{Binding CanPressPtt}", ptt.Attribute("IsEnabled")?.Value);
+    }
+
+    [AvaloniaTheory]
+    [InlineData(Key.Space)]
+    [InlineData(Key.Enter)]
+    public void Ptt_key_hold_ignores_repeats_and_releases_once_on_key_up_or_focus_loss(Key key)
+    {
+        var window = new MainWindow();
+        var presses = 0;
+        var releases = 0;
+        window.ManualPttPressed = () => { presses++; return Task.CompletedTask; };
+        window.ManualPttReleased = () => { releases++; return Task.CompletedTask; };
+        var button = window.FindControl<Button>("PttButton")!;
+
+        button.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key });
+        button.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key });
+        Assert.Equal(1, presses);
+        button.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyUpEvent, Key = Key.A });
+        Assert.Equal(0, releases);
+        button.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyUpEvent, Key = key });
+        button.RaiseEvent(new RoutedEventArgs(InputElement.LostFocusEvent));
+        Assert.Equal(1, releases);
+
+        button.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key });
+        button.RaiseEvent(new RoutedEventArgs(InputElement.LostFocusEvent));
+        button.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyUpEvent, Key = key });
+        Assert.Equal(2, presses);
+        Assert.Equal(2, releases);
+    }
+
+    [AvaloniaFact]
+    public void Ptt_ignores_other_keys_and_port_selection_does_not_refresh_discovery()
+    {
+        var window = new MainWindow { AllowExplicitClose = true };
+        window.Show();
+        var presses = 0;
+        var refreshes = 0;
+        var connections = 0;
+        window.ManualPttPressed = () => { presses++; return Task.CompletedTask; };
+        window.PttPortsRefreshRequested = () => { refreshes++; return Task.CompletedTask; };
+        window.PttOpenCloseRequested = () => { connections++; return Task.CompletedTask; };
+        var button = window.FindControl<Button>("PttButton")!;
+        button.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.A });
+        button.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyUpEvent, Key = Key.A });
+        var ports = window.FindControl<ComboBox>("PttPortComboBox")!;
+        ports.ItemsSource = new[] { "N/A", "COM4", "COM5" };
+        ports.SelectedIndex = 1;
+        ports.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Down });
+        Assert.Equal(0, presses);
+        Assert.Equal(0, refreshes);
+        ports.IsDropDownOpen = true;
+        Assert.Equal(1, refreshes);
+        window.FindControl<Button>("PttConnectionButton")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(1, connections);
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void Ptt_pointer_hold_releases_once_on_capture_or_focus_loss_and_normal_release()
+    {
+        var window = new MainWindow();
+        var presses = 0;
+        var releases = 0;
+        window.ManualPttPressed = () => { presses++; return Task.CompletedTask; };
+        window.ManualPttReleased = () => { releases++; return Task.CompletedTask; };
+        var button = window.FindControl<Button>("PttButton")!;
+        var pointer = new Pointer(1, PointerType.Mouse, true);
+        var pressed = new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed);
+        var released = new PointerPointProperties(RawInputModifiers.None, PointerUpdateKind.LeftButtonReleased);
+
+        button.RaiseEvent(new PointerPressedEventArgs(button, pointer, button, default, 0, pressed, KeyModifiers.None, 1));
+        Assert.Equal(1, presses);
+        button.RaiseEvent(new PointerCaptureLostEventArgs(button, pointer));
+        button.RaiseEvent(new PointerReleasedEventArgs(button, pointer, button, default, 1, released, KeyModifiers.None, MouseButton.Left));
+        button.RaiseEvent(new RoutedEventArgs(InputElement.LostFocusEvent));
+        Assert.Equal(1, releases);
+
+        button.RaiseEvent(new PointerPressedEventArgs(button, pointer, button, default, 2, pressed, KeyModifiers.None, 1));
+        button.RaiseEvent(new PointerReleasedEventArgs(button, pointer, button, default, 3, released, KeyModifiers.None, MouseButton.Left));
+        Assert.Equal(2, presses);
+        Assert.Equal(2, releases);
+    }
+
+    [AvaloniaFact]
+    public void Ptt_release_is_routed_even_while_the_async_press_is_still_pending()
+    {
+        var window = new MainWindow();
+        var pendingPress = new TaskCompletionSource();
+        var releases = 0;
+        window.ManualPttPressed = () => pendingPress.Task;
+        window.ManualPttReleased = () => { releases++; return Task.CompletedTask; };
+        var button = window.FindControl<Button>("PttButton")!;
+
+        button.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Space });
+        button.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyUpEvent, Key = Key.Space });
+        button.RaiseEvent(new RoutedEventArgs(InputElement.LostFocusEvent));
+        Assert.Equal(1, releases);
+        pendingPress.SetResult();
+    }
+
     [Fact]
     public void Main_window_keeps_preview_queue_and_approved_control_group_order()
     {
