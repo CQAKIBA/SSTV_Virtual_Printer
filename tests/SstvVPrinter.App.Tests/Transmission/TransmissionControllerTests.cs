@@ -9,6 +9,81 @@ public sealed class TransmissionControllerTests : IDisposable
     private readonly string _directory = Path.Combine(Path.GetTempPath(), $"sstv-controller-{Guid.NewGuid():N}");
 
     [Fact]
+    public async Task Send_generates_wave_before_entering_gate_and_plays_inside_it()
+    {
+        var artifacts = new FakeArtifacts(_directory);
+        var playback = new FakePlayback();
+        var controller = new TransmissionController(artifacts, playback);
+        var gate = new CallbackGate(async (play, token) =>
+        {
+            Assert.True(File.Exists(artifacts.TemporaryPath));
+            Assert.Equal(JobState.Transmitting, controller.State);
+            Assert.Equal(0, playback.PlayCount);
+            await play(token);
+            Assert.Equal(1, playback.PlayCount);
+        });
+
+        await controller.SendAsync(CreatePrepared(), "endpoint", gate, CancellationToken.None);
+
+        Assert.True(gate.Entered);
+        Assert.Equal(JobState.Completed, controller.State);
+        Assert.False(File.Exists(artifacts.TemporaryPath));
+    }
+
+    [Fact]
+    public async Task Stop_during_gate_sets_stopped_and_deletes_wave()
+    {
+        var artifacts = new FakeArtifacts(_directory);
+        var playback = new FakePlayback();
+        var controller = new TransmissionController(artifacts, playback);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var gate = new CallbackGate(async (_, token) =>
+        {
+            started.SetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, token);
+        });
+        var send = controller.SendAsync(CreatePrepared(), "endpoint", gate, CancellationToken.None);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        controller.Stop();
+        await send;
+
+        Assert.Equal(JobState.Stopped, controller.State);
+        Assert.Equal(0, playback.PlayCount);
+        Assert.False(File.Exists(artifacts.TemporaryPath));
+    }
+
+    [Fact]
+    public async Task Gate_fault_sets_failed_propagates_and_deletes_wave()
+    {
+        var artifacts = new FakeArtifacts(_directory);
+        var playback = new FakePlayback();
+        var controller = new TransmissionController(artifacts, playback);
+        var failure = new IOException("PTT lost");
+        var gate = new CallbackGate((_, _) => Task.FromException(failure));
+
+        var caught = await Assert.ThrowsAsync<IOException>(() =>
+            controller.SendAsync(CreatePrepared(), "endpoint", gate, CancellationToken.None));
+
+        Assert.Same(failure, caught);
+        Assert.Equal(JobState.Failed, controller.State);
+        Assert.Equal(0, playback.PlayCount);
+        Assert.False(File.Exists(artifacts.TemporaryPath));
+    }
+
+    [Fact]
+    public async Task Unrelated_gate_cancellation_is_failed_instead_of_stopped()
+    {
+        var controller = new TransmissionController(new FakeArtifacts(_directory), new FakePlayback());
+        var gate = new CallbackGate((_, _) => Task.FromException(new OperationCanceledException("PTT fault")));
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            controller.SendAsync(CreatePrepared(), "endpoint", gate, CancellationToken.None));
+
+        Assert.Equal(JobState.Failed, controller.State);
+    }
+
+    [Fact]
     public async Task Save_wave_does_not_invoke_playback()
     {
         var artifacts = new FakeArtifacts(_directory);
@@ -115,6 +190,16 @@ public sealed class TransmissionControllerTests : IDisposable
     public void Dispose()
     {
         if (Directory.Exists(_directory)) Directory.Delete(_directory, true);
+    }
+
+    private sealed class CallbackGate(Func<Func<CancellationToken, Task>, CancellationToken, Task> run) : ITransmissionGate
+    {
+        public bool Entered { get; private set; }
+        public Task RunAsync(Func<CancellationToken, Task> playback, CancellationToken cancellationToken)
+        {
+            Entered = true;
+            return run(playback, cancellationToken);
+        }
     }
 
     private sealed class FakeArtifacts(string directory) : ITransmissionArtifactService

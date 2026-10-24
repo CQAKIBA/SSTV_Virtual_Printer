@@ -20,13 +20,21 @@ public sealed class TransmissionController(
         CancellationToken cancellationToken) =>
         artifacts.SaveAsync(prepared, destinationPath, null, cancellationToken);
 
+    public Task SendAsync(
+        PreparedTransmission prepared,
+        string endpointId,
+        CancellationToken cancellationToken) =>
+        SendAsync(prepared, endpointId, NoOpTransmissionGate.Instance, cancellationToken);
+
     public async Task SendAsync(
         PreparedTransmission prepared,
         string endpointId,
+        ITransmissionGate gate,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(prepared);
         ArgumentException.ThrowIfNullOrWhiteSpace(endpointId);
+        ArgumentNullException.ThrowIfNull(gate);
         CancellationTokenSource linked;
         lock (_gate)
         {
@@ -49,14 +57,14 @@ public sealed class TransmissionController(
                 new InlineProgress(SetProgress),
                 linked.Token);
             linked.Token.ThrowIfCancellationRequested();
+            temporaryPath = Path.GetFullPath(temporaryPath);
             SetState(JobState.Transmitting);
             ResetProgress();
-            temporaryPath = Path.GetFullPath(temporaryPath);
-            await playback.PlayAsync(
+            await gate.RunAsync(token => playback.PlayAsync(
                 temporaryPath,
                 endpointId,
                 new InlineProgress(SetProgress),
-                linked.Token);
+                token), linked.Token);
             SetProgress(1);
             SetState(JobState.Completed);
         }
