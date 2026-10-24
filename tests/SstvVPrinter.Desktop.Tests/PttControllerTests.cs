@@ -93,6 +93,7 @@ public sealed class PttControllerTests
         Assert.False(controller.Snapshot.IsAsserted);
         Assert.False(controller.Snapshot.IsBusy);
         Assert.NotNull(controller.Snapshot.Error);
+        await platform.Connection.Disposed.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         Assert.False(platform.Connection.IsOpen);
         Assert.False(platform.Connection.Rts);
     }
@@ -258,20 +259,120 @@ public sealed class PttControllerTests
         }
     }
 
+    [Fact]
+    public async Task Automatic_acquisition_stalled_in_initialization_cannot_assert_after_disposal()
+    {
+        var platform = new FakePlatform();
+        platform.Connection.BlockNextRtsLow = true;
+        var controller = new PttController(platform);
+        var acquisition = controller.AcquireAutomaticAsync("COM2", PttControlMethod.Rts, TestContext.Current.CancellationToken);
+        await platform.Connection.RtsLowStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        try
+        {
+            await controller.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            var closedState = controller.Snapshot;
+            platform.Connection.ContinueRtsLow.TrySetResult();
+            var failure = await Record.ExceptionAsync(async () => await acquisition);
+
+            Assert.DoesNotContain("rts:True", platform.Connection.Calls);
+            Assert.DoesNotContain("dtr:True", platform.Connection.Calls);
+            Assert.IsType<ObjectDisposedException>(failure);
+            Assert.Same(closedState, controller.Snapshot);
+        }
+        finally
+        {
+            platform.Connection.ContinueRtsLow.TrySetResult();
+            await controller.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Canceled_new_manual_press_cannot_suppress_queued_release()
+    {
+        var platform = new FakePlatform();
+        await using var controller = new PttController(platform);
+        await controller.BeginManualAsync("COM2", PttControlMethod.Rts, TestContext.Current.CancellationToken);
+        platform.BlockDiscovery = true;
+        var discovery = controller.RefreshPortsAsync(TestContext.Current.CancellationToken);
+        await platform.DiscoveryStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        var release = controller.EndManualAsync(TestContext.Current.CancellationToken);
+        using var canceled = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        canceled.Cancel();
+        var press = controller.BeginManualAsync("COM2", PttControlMethod.Rts, canceled.Token);
+        platform.ContinueDiscovery.TrySetResult();
+        await discovery;
+        await release;
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => press);
+
+        Assert.False(controller.Snapshot.IsAsserted);
+        Assert.False(platform.Connection.Rts);
+        Assert.True(controller.Snapshot.IsOpen);
+    }
+
+    [Fact]
+    public async Task Removed_port_cleanup_is_bounded_and_cannot_overwrite_replacement_connection()
+    {
+        var platform = new FakePlatform();
+        var controller = new PttController(platform);
+        await using var lease = await controller.AcquireAutomaticAsync("COM2", PttControlMethod.Rts, TestContext.Current.CancellationToken);
+        platform.Connection.BlockClose = true;
+        platform.PortNames = [];
+        var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        controller.StateChanged += (_, state) => { if (!state.IsOpen) closed.TrySetResult(); };
+        try
+        {
+            await platform.TickAsync();
+            await platform.Connection.CloseStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            await closed.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            Assert.True(lease.FaultToken.IsCancellationRequested);
+            Assert.False(controller.Snapshot.IsAsserted);
+            Assert.NotNull(controller.Snapshot.Error);
+            Assert.Equal(["N/A"], await controller.RefreshPortsAsync(TestContext.Current.CancellationToken)
+                .WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+
+            var replacement = platform.NextConnection = new FakeConnection();
+            platform.PortNames = ["COM2"];
+            await controller.OpenAsync("COM2", PttControlMethod.Dtr, TestContext.Current.CancellationToken);
+            var replacementState = controller.Snapshot;
+            platform.Connection.ContinueClose.TrySetResult();
+            await platform.Connection.Disposed.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            await controller.RefreshPortsAsync(TestContext.Current.CancellationToken);
+
+            Assert.Same(replacementState, controller.Snapshot);
+            Assert.True(replacement.IsOpen);
+            Assert.DoesNotContain("close", replacement.Calls);
+            Assert.DoesNotContain("dispose", replacement.Calls);
+        }
+        finally
+        {
+            platform.Connection.ContinueClose.TrySetResult();
+            await controller.DisposeAsync();
+        }
+    }
+
     private sealed class FakePlatform : IPttPlatform
     {
         private readonly Channel<TaskCompletionSource> delays = Channel.CreateUnbounded<TaskCompletionSource>();
         public string[] PortNames { get; set; } = ["COM2"];
         public FakeConnection Connection { get; } = new();
+        public FakeConnection? NextConnection { get; set; }
+        public bool BlockDiscovery { get; set; }
+        public TaskCompletionSource DiscoveryStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource ContinueDiscovery { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public int CreateCount { get; private set; }
         public TaskCompletionSource DelayStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public CancellationToken LastDelayToken { get; private set; }
-        public string[] GetPortNames() => PortNames;
+        public string[] GetPortNames()
+        {
+            DiscoveryStarted.TrySetResult();
+            if (BlockDiscovery) ContinueDiscovery.Task.GetAwaiter().GetResult();
+            return PortNames;
+        }
         public IPttSerialConnection CreateConnection(string portName)
         {
             Assert.Equal("COM2", portName);
             CreateCount++;
-            return Connection;
+            return NextConnection ?? Connection;
         }
         public Task DelayAsync(TimeSpan delay, CancellationToken cancellationToken)
         {
@@ -294,6 +395,7 @@ public sealed class PttControllerTests
         public bool Dtr { get; private set; }
         public bool BlockOpen { get; set; }
         public bool BlockClose { get; set; }
+        public bool BlockNextRtsLow { get; set; }
         public bool FailNextAssertion { get; set; }
         public bool FailNextRelease { get; set; }
         public TaskCompletionSource OpenStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -301,6 +403,8 @@ public sealed class PttControllerTests
         public TaskCompletionSource CloseStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource ContinueClose { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Disposed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource RtsLowStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource ContinueRtsLow { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public void Open()
         {
             Calls.Enqueue("open");
@@ -318,6 +422,12 @@ public sealed class PttControllerTests
         public void SetRts(bool value)
         {
             Calls.Enqueue($"rts:{value}");
+            if (!value && BlockNextRtsLow)
+            {
+                BlockNextRtsLow = false;
+                RtsLowStarted.TrySetResult();
+                ContinueRtsLow.Task.GetAwaiter().GetResult();
+            }
             if (value && FailNextAssertion) { FailNextAssertion = false; throw new IOException("assert failed"); }
             if (!value && FailNextRelease) { FailNextRelease = false; throw new IOException("release failed"); }
             Rts = value;

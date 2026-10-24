@@ -12,6 +12,8 @@ public sealed class PttController(IPttPlatform platform) : IAsyncDisposable
     private PttSnapshot snapshot = new(null, PttControlMethod.Rts, false, false, false, null);
     private IReadOnlyList<string> ports = Array.AsReadOnly(new[] { "N/A" });
     private long manualGeneration;
+    private long manualOwnerGeneration;
+    private long connectionGeneration;
     private bool manualAsserted;
     private int disposalRequested;
     private bool publicationStopped;
@@ -41,9 +43,9 @@ public sealed class PttController(IPttPlatform platform) : IAsyncDisposable
         }, cancellationToken);
 
     public Task OpenAsync(string portName, PttControlMethod method, CancellationToken cancellationToken = default) =>
-        RunAsync(() => OpenCore(portName, method), cancellationToken);
+        RunAsync(generation => OpenCore(portName, method, generation, cancellationToken), cancellationToken);
 
-    public Task CloseAsync(CancellationToken cancellationToken = default) => RunAsync(() =>
+    public Task CloseAsync(CancellationToken cancellationToken = default) => RunAsync(_ =>
     {
         if (manualAsserted || automaticLease is not null)
             throw new InvalidOperationException("Release PTT before closing the port.");
@@ -52,14 +54,15 @@ public sealed class PttController(IPttPlatform platform) : IAsyncDisposable
 
     public Task BeginManualAsync(string portName, PttControlMethod method, CancellationToken cancellationToken = default)
     {
-        var generation = Interlocked.Increment(ref manualGeneration);
-        return RunAsync(() =>
+        var generation = Volatile.Read(ref manualGeneration);
+        return RunAsync(connectionVersion =>
         {
             if (automaticLease is not null || generation != Volatile.Read(ref manualGeneration)) return;
-            OpenCore(portName, method);
+            OpenCore(portName, method, connectionVersion, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             if (generation != Volatile.Read(ref manualGeneration)) return;
-            AssertCore();
+            AssertCore(connectionVersion, cancellationToken);
+            manualOwnerGeneration = generation;
             manualAsserted = true;
         }, cancellationToken);
     }
@@ -68,9 +71,9 @@ public sealed class PttController(IPttPlatform platform) : IAsyncDisposable
     {
         var generation = Interlocked.Increment(ref manualGeneration);
         // Releasing a keyed transmitter must survive cancellation of the initiating UI operation.
-        return RunAsync(() =>
+        return RunAsync(_ =>
         {
-            if (automaticLease is not null || !manualAsserted || generation != Volatile.Read(ref manualGeneration)) return;
+            if (automaticLease is not null || !manualAsserted || manualOwnerGeneration >= generation) return;
             ReleaseCore();
             manualAsserted = false;
         }, CancellationToken.None);
@@ -80,15 +83,15 @@ public sealed class PttController(IPttPlatform platform) : IAsyncDisposable
         string portName, PttControlMethod method, CancellationToken cancellationToken = default)
     {
         AutomaticLease? acquired = null;
-        await RunAsync(() =>
+        await RunAsync(generation =>
         {
             if (manualAsserted || automaticLease is not null)
                 throw new InvalidOperationException("PTT is already in use.");
             Interlocked.Increment(ref manualGeneration);
-            OpenCore(portName, method);
-            cancellationToken.ThrowIfCancellationRequested();
+            OpenCore(portName, method, generation, cancellationToken);
+            ThrowIfInvalid(generation, cancellationToken);
             acquired = automaticLease = new AutomaticLease(this);
-            AssertCore();
+            AssertCore(generation, cancellationToken);
         }, cancellationToken).ConfigureAwait(false);
         return acquired!;
     }
@@ -100,6 +103,7 @@ public sealed class PttController(IPttPlatform platform) : IAsyncDisposable
             if (disposalTask is not null) return new(disposalTask);
             Interlocked.Exchange(ref disposalRequested, 1);
             Interlocked.Increment(ref manualGeneration);
+            Interlocked.Increment(ref connectionGeneration);
             shutdown.Cancel();
             Volatile.Read(ref automaticLease)?.Fault();
             disposalTask = DisposeCoreAsync();
@@ -112,7 +116,7 @@ public sealed class PttController(IPttPlatform platform) : IAsyncDisposable
         var cleanup = Task.Run(async () =>
         {
             await mutex.WaitAsync().ConfigureAwait(false);
-            try { CloseCore(); }
+            try { CloseCore(boundCleanup: false); }
             finally { mutex.Release(); shutdown.Dispose(); }
         });
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
@@ -138,18 +142,30 @@ public sealed class PttController(IPttPlatform platform) : IAsyncDisposable
         }
     }
 
-    private Task RunAsync(Action action, CancellationToken cancellationToken) => Task.Run(async () =>
+    private Task RunAsync(Action<long> action, CancellationToken cancellationToken)
     {
-        await mutex.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        var generation = Volatile.Read(ref connectionGeneration);
+        return Task.Run(async () =>
         {
-            ObjectDisposedException.ThrowIf(Volatile.Read(ref disposalRequested) != 0, this);
-            action();
-        }
-        finally { mutex.Release(); }
-    }, cancellationToken);
+            await mutex.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                ThrowIfInvalid(generation, cancellationToken);
+                action(generation);
+            }
+            finally { mutex.Release(); }
+        }, cancellationToken);
+    }
 
-    private void OpenCore(string portName, PttControlMethod method)
+    private void ThrowIfInvalid(long generation, CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref disposalRequested) != 0, this);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (generation != Volatile.Read(ref connectionGeneration))
+            throw new OperationCanceledException("The PTT connection request is no longer current.");
+    }
+
+    private void OpenCore(string portName, PttControlMethod method, long generation, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(portName);
         if (portName.Equals("N/A", StringComparison.OrdinalIgnoreCase))
@@ -164,21 +180,26 @@ public sealed class PttController(IPttPlatform platform) : IAsyncDisposable
         {
             connection = platform.CreateConnection(portName);
             connection.Open();
-            ObjectDisposedException.ThrowIf(Volatile.Read(ref disposalRequested) != 0, this);
+            ThrowIfInvalid(generation, cancellationToken);
             connection.SetRts(false);
+            ThrowIfInvalid(generation, cancellationToken);
             connection.SetDtr(false);
+            ThrowIfInvalid(generation, cancellationToken);
             Publish(snapshot with { IsOpen = true });
             StartMonitor(connection);
         }
         catch (Exception ex) { FaultCore(ex); throw; }
     }
 
-    private void AssertCore()
+    private void AssertCore(long generation, CancellationToken cancellationToken)
     {
         try
         {
+            ThrowIfInvalid(generation, cancellationToken);
             connection!.SetRts(snapshot.Method == PttControlMethod.Rts);
+            ThrowIfInvalid(generation, cancellationToken);
             connection.SetDtr(snapshot.Method == PttControlMethod.Dtr);
+            ThrowIfInvalid(generation, cancellationToken);
             Publish(snapshot with { IsAsserted = true, IsBusy = automaticLease is not null, Error = null });
         }
         catch (Exception ex) { FaultCore(ex); throw; }
@@ -195,9 +216,9 @@ public sealed class PttController(IPttPlatform platform) : IAsyncDisposable
         catch (Exception ex) { FaultCore(ex); throw; }
     }
 
-    private void CloseCore()
+    private void CloseCore(bool boundCleanup = true)
     {
-        var error = CleanupConnection();
+        var error = CleanupConnection(boundCleanup);
         manualAsserted = false;
         automaticLease?.Fault();
         automaticLease = null;
@@ -205,12 +226,27 @@ public sealed class PttController(IPttPlatform platform) : IAsyncDisposable
         if (error is not null) throw error;
     }
 
-    private Exception? CleanupConnection()
+    private Exception? CleanupConnection(bool boundCleanup = true)
     {
         StopMonitor();
         var closing = connection;
         connection = null;
         if (closing is null) return null;
+        if (!boundCleanup) return CleanupSerial(closing);
+
+        // The detached worker only sees this connection. It never accesses controller state,
+        // so a driver that resumes after the bound cannot affect a replacement connection.
+        var cleanup = Task.Run(() => CleanupSerial(closing));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        try { return cleanup.WaitAsync(timeout.Token).GetAwaiter().GetResult(); }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        {
+            return new TimeoutException("Serial cleanup timed out and is continuing in the background.");
+        }
+    }
+
+    private static Exception? CleanupSerial(IPttSerialConnection closing)
+    {
         Exception? error = null;
         void Try(Action action) { try { action(); } catch (Exception ex) { error ??= ex; } }
         Try(() => closing.SetRts(false));
@@ -222,11 +258,16 @@ public sealed class PttController(IPttPlatform platform) : IAsyncDisposable
 
     private void FaultCore(Exception error)
     {
+        Interlocked.Increment(ref connectionGeneration);
+        Interlocked.Increment(ref manualGeneration);
         automaticLease?.Fault();
         automaticLease = null;
         manualAsserted = false;
-        CleanupConnection();
+        // Publish the fault before attempting potentially unresponsive driver operations.
         Publish(snapshot with { IsOpen = false, IsAsserted = false, IsBusy = false, Error = error.Message });
+        var cleanupError = CleanupConnection();
+        if (cleanupError is TimeoutException)
+            Publish(snapshot with { Error = $"{error.Message} {cleanupError.Message}" });
     }
 
     private Task ReleaseAutomaticAsync(AutomaticLease lease) => Task.Run(async () =>
