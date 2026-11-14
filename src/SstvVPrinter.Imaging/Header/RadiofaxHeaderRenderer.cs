@@ -33,16 +33,28 @@ public static class RadiofaxHeaderRenderer
 
         var headerHeight = definition.HeaderHeight;
         var unit = headerHeight / 16;
+        var metadataX = (8 * headerHeight) + (2 * unit);
+        var callSignX = width - (2 * unit) - request.CallSign.Length * 12 * unit;
+        var gap = 2 * unit;
+        if (callSignX < metadataX)
+        {
+            throw new ArgumentException("Call sign does not fit the Radiofax header.", nameof(request));
+        }
+
+        var fullMetadata = MetadataText(request);
+        string[] candidates = [fullMetadata, fullMetadata[5..], fullMetadata[11..], fullMetadata[17..]];
+        var metadata = candidates.FirstOrDefault(candidate =>
+            metadataX + ((candidate.Length * 6 - 1) * unit) + gap <= callSignX);
         for (var cell = 0; cell < ReferenceLevels.Length; cell++)
         {
             FillRect(rgb24, width, cell * headerHeight, 0, headerHeight, headerHeight, ReferenceLevels[cell]);
         }
 
         DrawOutline(rgb24, width, 0, 0, 8 * headerHeight, headerHeight, unit);
-        var metadataX = (8 * headerHeight) + (2 * unit);
-        var callSignWidth = request.CallSign.Length * 12 * unit;
-        var callSignX = width - (2 * unit) - callSignWidth;
-        DrawText(rgb24, width, metadataX, MetadataText(request), unit, 1, 1);
+        if (metadata is not null)
+        {
+            DrawText(rgb24, width, metadataX, metadata, unit, 1, 1);
+        }
         DrawText(rgb24, width, callSignX, request.CallSign, unit, 2, 2);
     }
 

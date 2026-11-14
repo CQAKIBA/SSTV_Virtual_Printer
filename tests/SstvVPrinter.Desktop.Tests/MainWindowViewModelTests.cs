@@ -441,6 +441,22 @@ public sealed class MainWindowViewModelTests
         Assert.False(Assert.IsType<bool>(visible.GetValue(viewModel)));
     }
 
+    [Fact]
+    public async Task Double_horizontal_preview_uses_corrected_height_for_scan_line()
+    {
+        var service = new ControlledPreparationService();
+        var model = new MainWindowViewModel(service);
+        var update = model.UpdatePreviewAsync(
+            CreateJob(), new TransmissionSettings("JA1UMW", SstvMode.Scottie2, 2));
+        service.Complete(0, 640, 256);
+        await update;
+        Assert.Equal(640, model.PreviewWidth);
+        Assert.Equal(512, model.PreviewHeight);
+        model.ApplyTransmissionState(JobState.Transmitting, (72 + 0.910) / 144, null);
+        Assert.True(model.IsScanLineVisible);
+        Assert.InRange(model.ScanLineY, 254, 257);
+    }
+
     private static PrintJob CreateJob() =>
         new(
             Guid.NewGuid(), "Paint", DateTimeOffset.UtcNow,

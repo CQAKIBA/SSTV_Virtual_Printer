@@ -190,7 +190,9 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
     public int StoredHorizontalSampleMultiplier => _isDoubleHorizontal ? 2 : 1;
     public bool IsPreviewEmpty => PreviewBitmap is null;
     public double PreviewWidth => Preview?.Frame.Width ?? 1;
-    public double PreviewHeight => Preview?.Frame.Height ?? 1;
+    public double PreviewHeight => Preview is { } preview
+        ? preview.Frame.Height * preview.Options.HorizontalSampleMultiplier
+        : 1;
     public bool CanSend => IsReady && IsSelectedJobActive && !IsSettingsLocked && SelectedAudioEndpoint?.IsAvailable is true;
     public bool CanSaveWave => IsReady && IsSelectedJobActive && !IsSettingsLocked;
     public bool CanDiscard => (Preview is not null || SelectedJob is not null) && !IsSettingsLocked;
@@ -400,7 +402,7 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
         }
 
         var imageProgress = (elapsedSeconds - imageStartSeconds) / (imageEndSeconds - imageStartSeconds);
-        ScanLineY = imageProgress * Math.Max(0, preview.Frame.Height - 1);
+        ScanLineY = imageProgress * Math.Max(0, PreviewHeight - 1);
         IsScanLineVisible = true;
     }
 

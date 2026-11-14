@@ -37,6 +37,24 @@ public sealed class RadiofaxHeaderRendererTests
         Assert.Contains((byte)0, pixels.AsSpan((8 * headerHeight + 1) * 3, (width - (8 * headerHeight + 1)) * headerHeight * 3).ToArray());
     }
 
+    [Theory]
+    [InlineData(SstvMode.Radiofax120Ioc288Sync20Ms, 864, 32)]
+    [InlineData(SstvMode.Radiofax120Ioc576Sync20Ms, 1728, 64)]
+    public void Draw_leaves_a_clear_gap_before_a_long_call_sign(SstvMode mode, int width, int height)
+    {
+        const string callSign = "EA8/JA1UMW/P";
+        var request = new CompositionRequest(mode, 1, callSign, DateTimeOffset.UnixEpoch);
+        var pixels = Enumerable.Repeat((byte)211, width * height * 3).ToArray();
+        RadiofaxHeaderRenderer.Draw(pixels, width, height, request);
+        var unit = height / 16;
+        var callSignX = width - (2 + callSign.Length * 12) * unit;
+        for (var y = 0; y < height; y++)
+        for (var x = callSignX - 2 * unit; x < callSignX; x++)
+            AssertPixel(pixels, width, x, y, 211);
+        AssertPixel(pixels, width, callSignX, unit, 0);
+        AssertPixel(pixels, width, callSignX + (callSign.Length - 1) * 12 * unit, unit, 0);
+    }
+
     private static void AssertPixel(byte[] pixels, int width, int x, int y, byte expected)
     {
         var offset = ((y * width) + x) * 3;
