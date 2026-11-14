@@ -61,6 +61,21 @@ public sealed class UserPreferencesTests : IDisposable
         Assert.Equal("RTS", result.PttMethod);
     }
 
+    [Fact]
+    public async Task Clearing_saved_ptt_port_keeps_method_and_other_preferences()
+    {
+        var store = new JsonUserPreferencesStore(_directory);
+        var saved = new UserPreferences("JA1UMW", SstvMode.Robot36, 2, "audio", false,
+            PttPortName: "COM4", PttMethod: "DTR");
+        await store.SaveAsync(saved);
+        await store.SaveAsync((await store.LoadAsync()) with { PttPortName = null });
+
+        Assert.Equal(saved with { PttPortName = null }, await store.LoadAsync());
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(_directory, "SstvVPrinter", "settings.json")));
+        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("PttPortName").ValueKind);
+        Assert.Equal("DTR", document.RootElement.GetProperty("PttMethod").GetString());
+    }
+
     [Theory]
     [InlineData("rts")]
     [InlineData("CTS")]
