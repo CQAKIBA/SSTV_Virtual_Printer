@@ -45,7 +45,8 @@ public sealed class TransmissionPreparationService : ITransmissionPreparationSer
                 settings.Mode,
                 multiplier,
                 settings.CallSign,
-                headerTime);
+                headerTime,
+                settings.HeaderPlacement);
             var page = PageRotator.Rotate(job.Page, settings.RotationDegrees, cancellationToken);
             RgbFrame frame;
             try

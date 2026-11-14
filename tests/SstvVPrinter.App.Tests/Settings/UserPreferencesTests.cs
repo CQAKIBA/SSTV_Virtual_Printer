@@ -21,7 +21,67 @@ public sealed class UserPreferencesTests : IDisposable
         Assert.Null(result.AudioEndpointId);
         Assert.True(result.StartAtSignIn);
         Assert.Equal(0, result.RotationDegrees);
+        Assert.Equal(0, ReadHeaderOverlayModeMask(result));
+        Assert.False(ReadDeleteAfterSend(result));
     }
+
+    [Fact]
+    public void Defaults_to_no_ptt_and_rts()
+    {
+        Assert.Null(UserPreferences.Default.PttPortName);
+        Assert.Equal("RTS", UserPreferences.Default.PttMethod);
+    }
+
+    [Fact]
+    public async Task Round_trip_preserves_ptt_port_and_method()
+    {
+        var store = new JsonUserPreferencesStore(_directory);
+        var expected = new UserPreferences(
+            "JA1UMW", SstvMode.Scottie2, 1, null, true, PttPortName: "COM7", PttMethod: "DTR");
+
+        await store.SaveAsync(expected);
+        var actual = await store.LoadAsync();
+
+        Assert.Equal("COM7", actual.PttPortName);
+        Assert.Equal("DTR", actual.PttMethod);
+    }
+
+    [Fact]
+    public async Task Old_json_without_ptt_fields_loads_defaults()
+    {
+        var settingsDirectory = Path.Combine(_directory, "SstvVPrinter");
+        Directory.CreateDirectory(settingsDirectory);
+        await File.WriteAllTextAsync(
+            Path.Combine(settingsDirectory, "settings.json"),
+            """{"CallSign":"JA1UMW","Mode":2,"HorizontalSampleMultiplier":1,"AudioEndpointId":null,"StartAtSignIn":true}""");
+
+        var result = await new JsonUserPreferencesStore(_directory).LoadAsync();
+
+        Assert.Null(result.PttPortName);
+        Assert.Equal("RTS", result.PttMethod);
+    }
+
+    [Fact]
+    public async Task Clearing_saved_ptt_port_keeps_method_and_other_preferences()
+    {
+        var store = new JsonUserPreferencesStore(_directory);
+        var saved = new UserPreferences("JA1UMW", SstvMode.Robot36, 2, "audio", false,
+            PttPortName: "COM4", PttMethod: "DTR");
+        await store.SaveAsync(saved);
+        await store.SaveAsync((await store.LoadAsync()) with { PttPortName = null });
+
+        Assert.Equal(saved with { PttPortName = null }, await store.LoadAsync());
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(_directory, "SstvVPrinter", "settings.json")));
+        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("PttPortName").ValueKind);
+        Assert.Equal("DTR", document.RootElement.GetProperty("PttMethod").GetString());
+    }
+
+    [Theory]
+    [InlineData("rts")]
+    [InlineData("CTS")]
+    public void Preferences_reject_unsupported_ptt_methods(string pttMethod) =>
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new UserPreferences("JA1UMW", SstvMode.Scottie2, 1, null, true, PttMethod: pttMethod));
 
     [Fact]
     public async Task Corrupt_json_returns_safe_defaults()
@@ -48,6 +108,24 @@ public sealed class UserPreferencesTests : IDisposable
 
         Assert.Equal("JA1UMW", result.CallSign);
         Assert.Equal(0, result.RotationDegrees);
+    }
+
+    [Fact]
+    public async Task Header_overlay_mode_mask_survives_load_and_save()
+    {
+        var settingsDirectory = Path.Combine(_directory, "SstvVPrinter");
+        Directory.CreateDirectory(settingsDirectory);
+        var path = Path.Combine(settingsDirectory, "settings.json");
+        await File.WriteAllTextAsync(
+            path,
+            """{"CallSign":"JA1UMW","Mode":2,"HorizontalSampleMultiplier":1,"AudioEndpointId":null,"StartAtSignIn":true,"RotationDegrees":0,"HeaderOverlayModeMask":36}""");
+        var store = new JsonUserPreferencesStore(_directory);
+
+        var loaded = await store.LoadAsync();
+        await store.SaveAsync(loaded);
+
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(path));
+        Assert.Equal(36, document.RootElement.GetProperty("HeaderOverlayModeMask").GetInt32());
     }
 
     [Theory]
@@ -77,12 +155,12 @@ public sealed class UserPreferencesTests : IDisposable
     {
         var preferences = new UserPreferences(
             "TEST",
-            SstvMode.Radiofax120Ioc288,
+            SstvMode.Radiofax120Ioc288Sync20Ms,
             1,
             null,
             true);
 
-        Assert.Equal(SstvMode.Radiofax120Ioc288, preferences.Mode);
+        Assert.Equal(SstvMode.Radiofax120Ioc288Sync20Ms, preferences.Mode);
     }
 
     [Fact]
@@ -98,7 +176,7 @@ public sealed class UserPreferencesTests : IDisposable
         var settingsDirectory = Path.Combine(_directory, "SstvVPrinter");
         Assert.Empty(Directory.EnumerateFiles(settingsDirectory, "*.tmp"));
         using var document = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(settingsDirectory, "settings.json")));
-        Assert.Equal(6, document.RootElement.EnumerateObject().Count());
+        Assert.Equal(10, document.RootElement.EnumerateObject().Count());
         Assert.False(document.RootElement.TryGetProperty("Page", out _));
         Assert.False(document.RootElement.TryGetProperty("Jobs", out _));
     }
@@ -123,5 +201,19 @@ public sealed class UserPreferencesTests : IDisposable
         {
             Directory.Delete(_directory, recursive: true);
         }
+    }
+
+    private static int ReadHeaderOverlayModeMask(UserPreferences preferences)
+    {
+        var property = typeof(UserPreferences).GetProperty("HeaderOverlayModeMask");
+        Assert.NotNull(property);
+        return Assert.IsType<int>(property.GetValue(preferences));
+    }
+
+    private static bool ReadDeleteAfterSend(UserPreferences preferences)
+    {
+        var property = typeof(UserPreferences).GetProperty("DeleteAfterSend");
+        Assert.NotNull(property);
+        return Assert.IsType<bool>(property.GetValue(preferences));
     }
 }

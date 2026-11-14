@@ -43,11 +43,19 @@ public sealed class RadiofaxFrameComposer
             throw new RadiofaxPageShapeException();
         }
 
-        var fitted = _resampler.Fit(page, definition.ActiveWidth, bodyHeight, cancellationToken);
-        var totalHeight = checked(definition.HeaderHeight + bodyHeight);
-        var canvas = new byte[checked(definition.ActiveWidth * totalHeight * 3)];
-        canvas.AsSpan(0, definition.ActiveWidth * definition.HeaderHeight * 3).Fill(255);
-        var destination = canvas.AsSpan(definition.ActiveWidth * definition.HeaderHeight * 3);
+        var contentHeight = request.Placement == HeaderPlacement.ReserveSpace
+            ? bodyHeight - definition.HeaderHeight
+            : bodyHeight;
+        var fitted = _resampler.Fit(page, definition.ActiveWidth, contentHeight, cancellationToken);
+        var canvas = new byte[checked(definition.ActiveWidth * bodyHeight * 3)];
+        var headerByteCount = definition.ActiveWidth * definition.HeaderHeight * 3;
+        if (request.Placement == HeaderPlacement.ReserveSpace)
+        {
+            canvas.AsSpan(0, headerByteCount).Fill(255);
+        }
+        var destination = request.Placement == HeaderPlacement.ReserveSpace
+            ? canvas.AsSpan(headerByteCount)
+            : canvas.AsSpan();
         var source = fitted.Pixels;
         for (var index = 0; index < source.Length; index += 3)
         {
@@ -58,8 +66,16 @@ public sealed class RadiofaxFrameComposer
             destination[index + 2] = luminance;
         }
 
-        RadiofaxHeaderRenderer.Draw(canvas, definition.ActiveWidth, totalHeight, request);
+        if (request.Placement == HeaderPlacement.Overlay)
+        {
+            for (var index = 0; index < headerByteCount; index++)
+            {
+                canvas[index] = (byte)((canvas[index] + 255) / 2);
+            }
+        }
 
-        return RgbFrame.Create(definition.ActiveWidth, totalHeight, canvas);
+        RadiofaxHeaderRenderer.Draw(canvas, definition.ActiveWidth, bodyHeight, request);
+
+        return RgbFrame.Create(definition.ActiveWidth, bodyHeight, canvas);
     }
 }

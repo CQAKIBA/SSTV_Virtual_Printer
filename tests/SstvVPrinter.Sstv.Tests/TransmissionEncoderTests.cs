@@ -7,7 +7,7 @@ public sealed class TransmissionEncoderTests
     [Fact]
     public void Generic_options_validate_radiofax_dimensions_before_enumeration()
     {
-        var options = new TransmissionEncodeOptions(SstvMode.Radiofax120Ioc288);
+        var options = new TransmissionEncodeOptions(SstvMode.Radiofax120Ioc288Sync20Ms);
         var wrongFrame = Frame(320, 256);
 
         Assert.Throws<ArgumentException>(() => options.Validate(wrongFrame));
@@ -18,7 +18,7 @@ public sealed class TransmissionEncoderTests
     public async Task Generic_encoder_dispatches_radiofax_and_duration_matches_samples()
     {
         var frame = Frame(864, 32);
-        var options = new TransmissionEncodeOptions(SstvMode.Radiofax120Ioc288);
+        var options = new TransmissionEncodeOptions(SstvMode.Radiofax120Ioc288Sync20Ms);
 
         var sampleCount = await Count(TransmissionEncoder.EncodeAsync(frame, options));
 

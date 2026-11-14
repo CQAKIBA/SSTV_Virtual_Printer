@@ -2,6 +2,7 @@ using SstvVPrinter.App.Jobs;
 using SstvVPrinter.App.Audio;
 using SstvVPrinter.App.Transmission;
 using SstvVPrinter.Desktop.ViewModels;
+using SstvVPrinter.Desktop.Ptt;
 using SstvVPrinter.Imaging.Model;
 using SstvVPrinter.Sstv;
 
@@ -9,6 +10,85 @@ namespace SstvVPrinter.Desktop.Tests;
 
 public sealed class MainWindowViewModelTests
 {
+    [Fact]
+    public void Ptt_requires_a_selected_port_and_keeps_closed_selection_separate_from_snapshot()
+    {
+        var viewModel = new MainWindowViewModel(new ControlledPreparationService());
+
+        Assert.Equal(["N/A"], viewModel.PttPorts);
+        Assert.Equal("N/A", viewModel.SelectedPttPort);
+        Assert.False(viewModel.CanTogglePttConnection);
+        Assert.False(viewModel.CanPressPtt);
+        Assert.Equal([PttControlMethod.Rts, PttControlMethod.Dtr], viewModel.PttMethods);
+        viewModel.SelectedPttPort = "COM4";
+        viewModel.SelectedPttMethod = PttControlMethod.Dtr;
+        viewModel.ApplyPttSnapshot(new(null, PttControlMethod.Rts, false, false, false, null));
+
+        Assert.Equal("COM4", viewModel.SelectedPttPort);
+        Assert.Equal(PttControlMethod.Dtr, viewModel.SelectedPttMethod);
+        Assert.Equal("OPEN", viewModel.PttConnectionButtonText);
+        Assert.Equal("#344050", viewModel.PttConnectionBrush);
+        Assert.True(viewModel.CanTogglePttConnection);
+        Assert.True(viewModel.CanPressPtt);
+        Assert.True(viewModel.CanEditPttSettings);
+    }
+
+    [Fact]
+    public void Ptt_snapshot_updates_connection_assertion_and_every_dependent_binding()
+    {
+        var viewModel = new MainWindowViewModel(new ControlledPreparationService()) { SelectedPttPort = "COM4" };
+        var notified = new List<string?>();
+        viewModel.PropertyChanged += (_, args) => notified.Add(args.PropertyName);
+
+        viewModel.ApplyPttSnapshot(new("COM4", PttControlMethod.Rts, true, true, false, null));
+
+        Assert.True(viewModel.IsPttOpen);
+        Assert.True(viewModel.IsPttAsserted);
+        Assert.False(viewModel.IsPttBusy);
+        Assert.Equal("CLOSE", viewModel.PttConnectionButtonText);
+        Assert.Equal("#FF3D21", viewModel.PttConnectionBrush);
+        Assert.Equal("#FF3D21", viewModel.PttButtonBrush);
+        Assert.False(viewModel.CanEditPttSettings);
+        Assert.False(viewModel.CanTogglePttConnection);
+        foreach (var name in new[] { "PttConnectionButtonText", "PttConnectionBrush", "PttButtonBrush", "CanEditPttSettings", "CanTogglePttConnection", "CanPressPtt" })
+            Assert.Contains(name, notified);
+    }
+
+    [Fact]
+    public void Sending_locks_ptt_controls_while_preserving_visible_connection_state()
+    {
+        var viewModel = new MainWindowViewModel(new ControlledPreparationService()) { SelectedPttPort = "COM4" };
+        viewModel.ApplyPttSnapshot(new("COM4", PttControlMethod.Rts, true, false, false, null));
+        Assert.True(viewModel.CanTogglePttConnection);
+        Assert.True(viewModel.CanPressPtt);
+
+        viewModel.ApplyTransmissionState(JobState.Transmitting, 0, null);
+
+        Assert.True(viewModel.IsPttOpen);
+        Assert.Equal("CLOSE", viewModel.PttConnectionButtonText);
+        Assert.Equal("#FF3D21", viewModel.PttConnectionBrush);
+        Assert.False(viewModel.CanEditPttSettings);
+        Assert.False(viewModel.CanTogglePttConnection);
+        Assert.False(viewModel.CanPressPtt);
+        viewModel.ApplyTransmissionState(JobState.Stopped, 0, null);
+        Assert.True(viewModel.CanTogglePttConnection);
+        Assert.True(viewModel.CanPressPtt);
+    }
+
+    [Fact]
+    public void Automatic_ptt_busy_disables_close_and_manual_ptt_without_hiding_assertion()
+    {
+        var viewModel = new MainWindowViewModel(new ControlledPreparationService()) { SelectedPttPort = "COM4" };
+
+        viewModel.ApplyPttSnapshot(new("COM4", PttControlMethod.Rts, true, true, true, null));
+
+        Assert.True(viewModel.IsPttBusy);
+        Assert.Equal("#FF3D21", viewModel.PttButtonBrush);
+        Assert.False(viewModel.CanTogglePttConnection);
+        Assert.False(viewModel.CanPressPtt);
+        Assert.False(viewModel.CanEditPttSettings);
+    }
+
     [Fact]
     public void Radiofax_modes_follow_existing_sstv_modes_and_force_effective_one_x()
     {
@@ -19,9 +99,9 @@ public sealed class MainWindowViewModelTests
 
         Assert.Equal(
             [SstvMode.Scottie2, SstvMode.Scottie1, SstvMode.Martin1, SstvMode.Robot36,
-                SstvMode.Radiofax120Ioc288, SstvMode.Radiofax120Ioc576],
+                (SstvMode)4, (SstvMode)5, (SstvMode)6, (SstvMode)7],
             viewModel.AvailableModes);
-        viewModel.SelectedMode = SstvMode.Radiofax120Ioc288;
+        viewModel.SelectedMode = (SstvMode)4;
         Assert.True(viewModel.IsRadiofaxMode);
         Assert.False(viewModel.IsHorizontalMultiplierEnabled);
         Assert.False(viewModel.IsDoubleHorizontal);
@@ -31,6 +111,21 @@ public sealed class MainWindowViewModelTests
         Assert.False(viewModel.IsRadiofaxMode);
         Assert.True(viewModel.IsHorizontalMultiplierEnabled);
         Assert.True(viewModel.IsDoubleHorizontal);
+    }
+
+    [Fact]
+    public void Header_overlay_choice_is_remembered_independently_for_each_mode()
+    {
+        var viewModel = new MainWindowViewModel(new ControlledPreparationService());
+        var property = typeof(MainWindowViewModel).GetProperty("IsHeaderOverlay");
+        Assert.NotNull(property);
+
+        property.SetValue(viewModel, true);
+        viewModel.SelectedMode = SstvMode.Martin1;
+        Assert.False(Assert.IsType<bool>(property.GetValue(viewModel)));
+        property.SetValue(viewModel, true);
+        viewModel.SelectedMode = SstvMode.Scottie2;
+        Assert.True(Assert.IsType<bool>(property.GetValue(viewModel)));
     }
 
     [Fact]
@@ -44,7 +139,7 @@ public sealed class MainWindowViewModelTests
             IsSelectedJobActive = true,
         };
         var update = viewModel.UpdatePreviewAsync(
-            job, new TransmissionSettings("JA1UMW", SstvMode.Radiofax120Ioc288, 1));
+            job, new TransmissionSettings("JA1UMW", SstvMode.Radiofax120Ioc288Sync20Ms, 1));
         service.Fail(0, new TransmissionValidationException("画像比率は1:2から2:1までです。"));
 
         await update;
@@ -65,7 +160,7 @@ public sealed class MainWindowViewModelTests
         var first = viewModel.UpdatePreviewAsync(
             viewModel.SelectedJob, new TransmissionSettings("JA1UMW", SstvMode.Scottie2, 1));
         var second = viewModel.UpdatePreviewAsync(
-            viewModel.SelectedJob, new TransmissionSettings("JA1UMW", SstvMode.Radiofax120Ioc288, 1));
+            viewModel.SelectedJob, new TransmissionSettings("JA1UMW", SstvMode.Radiofax120Ioc288Sync20Ms, 1));
         service.Fail(1, new TransmissionValidationException("画像比率は1:2から2:1までです。"));
         await second;
         service.Complete(0, 320, 256);
@@ -211,7 +306,7 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
-    public void Transmitting_locks_settings_and_exposes_stop_and_remaining_time()
+    public void Transmitting_locks_settings_and_combines_remaining_time_with_percentage()
     {
         var viewModel = new MainWindowViewModel(new ControlledPreparationService());
 
@@ -220,8 +315,29 @@ public sealed class MainWindowViewModelTests
         Assert.True(viewModel.IsSettingsLocked);
         Assert.True(viewModel.CanStop);
         Assert.False(viewModel.CanSend);
-        Assert.Equal("送信中", viewModel.StatusText);
-        Assert.Equal("残り 01:30", viewModel.RemainingTimeText);
+        Assert.Equal("送信中 残り01:30 (25.0%)", viewModel.StatusText);
+        Assert.Null(viewModel.RemainingTimeText);
+    }
+
+    [Fact]
+    public async Task Stopping_transmission_keeps_prepared_job_ready_for_send_and_wave_save()
+    {
+        var service = new ControlledPreparationService();
+        var viewModel = new MainWindowViewModel(service)
+        {
+            SelectedAudioEndpoint = new AudioEndpointInfo("test", "Test", true, 50, false),
+        };
+        Task update = viewModel.UpdatePreviewAsync(CreateJob(), new TransmissionSettings("JA1UMW", SstvMode.Scottie2, 1));
+        service.Complete(0, 320, 256);
+        await update;
+        viewModel.ApplyTransmissionState(JobState.Transmitting, 0.25, TimeSpan.FromSeconds(90));
+
+        viewModel.CancelPreparation();
+        viewModel.ApplyTransmissionState(JobState.Stopped, 0, null);
+
+        Assert.True(viewModel.IsReady);
+        Assert.True(viewModel.CanSend);
+        Assert.True(viewModel.CanSaveWave);
     }
 
     [Fact]
@@ -300,6 +416,31 @@ public sealed class MainWindowViewModelTests
         Assert.Equal("APP VOLUME LOW", viewModel.MuteWarning);
     }
 
+    [Fact]
+    public async Task Radiofax_scan_line_is_visible_only_during_image_section()
+    {
+        var service = new ControlledPreparationService();
+        var viewModel = new MainWindowViewModel(service);
+        Task update = viewModel.UpdatePreviewAsync(
+            CreateJob(), new TransmissionSettings("JA1UMW", SstvMode.Radiofax120Ioc288Sync20Ms, 1));
+        service.Complete(0, 864, 432, TimeSpan.FromSeconds(266));
+        await update;
+        var visible = typeof(MainWindowViewModel).GetProperty("IsScanLineVisible");
+        var y = typeof(MainWindowViewModel).GetProperty("ScanLineY");
+        Assert.NotNull(visible);
+        Assert.NotNull(y);
+
+        viewModel.ApplyTransmissionState(JobState.Transmitting, 34.0 / 266, TimeSpan.FromSeconds(232));
+        Assert.False(Assert.IsType<bool>(visible.GetValue(viewModel)));
+
+        viewModel.ApplyTransmissionState(JobState.Transmitting, 143.0 / 266, TimeSpan.FromSeconds(123));
+        Assert.True(Assert.IsType<bool>(visible.GetValue(viewModel)));
+        Assert.InRange(Assert.IsType<double>(y.GetValue(viewModel)), 215, 216);
+
+        viewModel.ApplyTransmissionState(JobState.Transmitting, 251.0 / 266, TimeSpan.FromSeconds(15));
+        Assert.False(Assert.IsType<bool>(visible.GetValue(viewModel)));
+    }
+
     private static PrintJob CreateJob() =>
         new(
             Guid.NewGuid(), "Paint", DateTimeOffset.UtcNow,
@@ -322,7 +463,7 @@ public sealed class MainWindowViewModelTests
             return completion.Task;
         }
 
-        public void Complete(int index, int width, int height)
+        public void Complete(int index, int width, int height, TimeSpan? duration = null)
         {
             var request = Requests[index];
             var options = new TransmissionEncodeOptions(
@@ -330,7 +471,7 @@ public sealed class MainWindowViewModelTests
             request.Completion.SetResult(new(
                 RgbFrame.Create(width, height, new byte[width * height * 3]),
                 options,
-                TimeSpan.FromSeconds(72),
+                duration ?? TimeSpan.FromSeconds(72),
                 DateTimeOffset.UtcNow));
         }
 

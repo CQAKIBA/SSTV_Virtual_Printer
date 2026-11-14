@@ -57,8 +57,8 @@ internal static class Program
             "scottie1" => SstvMode.Scottie1,
             "scottie2" => SstvMode.Scottie2,
             "robot36" => SstvMode.Robot36,
-            "fax288" => SstvMode.Radiofax120Ioc288,
-            "fax576" => SstvMode.Radiofax120Ioc576,
+    "fax288" => SstvMode.Radiofax120Ioc288Sync20Ms,
+    "fax576" => SstvMode.Radiofax120Ioc576Sync20Ms,
             _ => throw Usage(),
         };
         if (!int.TryParse(horizontalText, out var horizontal) || horizontal is not (1 or 2)) throw Usage();

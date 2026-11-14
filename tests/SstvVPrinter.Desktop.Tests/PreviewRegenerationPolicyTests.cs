@@ -9,6 +9,7 @@ public sealed class PreviewRegenerationPolicyTests
     [InlineData(nameof(MainWindowViewModel.SelectedMode))]
     [InlineData(nameof(MainWindowViewModel.IsDoubleHorizontal))]
     [InlineData(nameof(MainWindowViewModel.RotationDegrees))]
+    [InlineData("IsHeaderOverlay")]
     public void Image_affecting_preferences_require_regeneration(string propertyName)
     {
         Assert.True(PreviewRegenerationPolicy.RequiresRegeneration(propertyName));

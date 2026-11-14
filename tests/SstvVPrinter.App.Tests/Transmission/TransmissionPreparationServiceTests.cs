@@ -11,9 +11,9 @@ public sealed class TransmissionPreparationServiceTests
     [Fact]
     public void Transmission_settings_accept_radiofax_mode_metadata()
     {
-        var settings = new TransmissionSettings("TEST", SstvMode.Radiofax120Ioc576, 1);
+        var settings = new TransmissionSettings("TEST", SstvMode.Radiofax120Ioc576Sync20Ms, 1);
 
-        Assert.Equal(SstvMode.Radiofax120Ioc576, settings.Mode);
+        Assert.Equal(SstvMode.Radiofax120Ioc576Sync20Ms, settings.Mode);
     }
 
     [Theory]
@@ -36,8 +36,8 @@ public sealed class TransmissionPreparationServiceTests
     }
 
     [Theory]
-    [InlineData(SstvMode.Radiofax120Ioc288, 864, 464)]
-    [InlineData(SstvMode.Radiofax120Ioc576, 1728, 928)]
+    [InlineData(SstvMode.Radiofax120Ioc288Sync20Ms, 864, 432)]
+    [InlineData(SstvMode.Radiofax120Ioc576Sync20Ms, 1728, 864)]
     public async Task Prepare_produces_variable_height_grayscale_radiofax(
         SstvMode mode,
         int expectedWidth,
@@ -63,10 +63,10 @@ public sealed class TransmissionPreparationServiceTests
 
         var result = await service.PrepareAsync(
             CreateJob(),
-            new TransmissionSettings("JA1UMW", SstvMode.Radiofax120Ioc288, 1, 90),
+            new TransmissionSettings("JA1UMW", SstvMode.Radiofax120Ioc288Sync20Ms, 1, 90),
             CancellationToken.None);
 
-        Assert.Equal((864, 1760), (result.Frame.Width, result.Frame.Height));
+        Assert.Equal((864, 1728), (result.Frame.Width, result.Frame.Height));
     }
 
     [Fact]
@@ -83,7 +83,7 @@ public sealed class TransmissionPreparationServiceTests
         var exception = await Assert.ThrowsAsync<TransmissionValidationException>(() =>
             service.PrepareAsync(
                 job,
-                new TransmissionSettings("JA1UMW", SstvMode.Radiofax120Ioc288, 1),
+                new TransmissionSettings("JA1UMW", SstvMode.Radiofax120Ioc288Sync20Ms, 1),
                 CancellationToken.None));
 
         Assert.Contains("1:2", exception.Message, StringComparison.Ordinal);

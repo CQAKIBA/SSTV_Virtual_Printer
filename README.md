@@ -17,7 +17,7 @@ The wider aim is to create more opportunities for amateur radio and MOE / creati
 - Accepts the first printed page as PWG Raster and opens the preparation window.
 - Fits the page into the selected transmission frame without changing its aspect ratio.
 - Adds an always-visible identification header: RGB for SSTV, or an eight-step grayscale reference for Radiofax.
-- Supports Martin 1, Scottie 1, Scottie 2, Robot 36, and experimental Radiofax 120/288 and 120/576 transmission.
+- Supports Martin 1, Scottie 1, Scottie 2, Robot 36, and experimental RadioFAX 120/288 and 120/576 transmission with selectable 10 ms or 20 ms line sync.
 - Offers experimental 2x horizontal sampling for improved SSTV fine-detail reproduction; Radiofax uses its standard sampling.
 - Corrects troublesome application/page orientations with persistent −90° and +90° controls.
 - Previews the exact composed image, plays SSTV audio through a selected Windows output, or saves it as WAV.
@@ -77,7 +77,7 @@ The IPP listener binds to loopback by default. Running this as a LAN print serve
 - Only the first page of each print job is processed.
 - Horizontal 2x has decoded successfully in limited tests but remains experimental.
 - Radiofax transmission is experimental and has not yet been certified against real weather-fax equipment or an RF receiver. Its 1:2 through 2:1 input-ratio safeguard rejects unusually long pages before audio generation.
-- A portrait A4 page takes approximately 11:17 in Radiofax 120/288 or 21:44 in Radiofax 120/576, including control signals. Actual duration varies with the composed page ratio.
+- A portrait A4 page takes approximately 11:01 in RadioFAX 120/288 or 21:12 in RadioFAX 120/576, including control signals. Actual duration varies with the composed page ratio.
 - Binaries are not code-signed.
 
 ## Development

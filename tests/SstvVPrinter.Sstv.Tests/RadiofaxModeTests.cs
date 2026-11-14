@@ -36,8 +36,8 @@ public sealed class RadiofaxModeTests
     }
 
     [Theory]
-    [InlineData(SstvMode.Radiofax120Ioc288, 864, 32, 1760)]
-    [InlineData(SstvMode.Radiofax120Ioc576, 1728, 64, 3520)]
+    [InlineData(SstvMode.Radiofax120Ioc288Sync20Ms, 864, 32, 1760)]
+    [InlineData(SstvMode.Radiofax120Ioc576Sync20Ms, 1728, 64, 3520)]
     public void Radiofax_options_accept_exact_width_and_inclusive_height_range(
         SstvMode mode,
         int width,
@@ -51,12 +51,12 @@ public sealed class RadiofaxModeTests
     }
 
     [Theory]
-    [InlineData(SstvMode.Radiofax120Ioc288, 863, 32)]
-    [InlineData(SstvMode.Radiofax120Ioc288, 864, 31)]
-    [InlineData(SstvMode.Radiofax120Ioc288, 864, 1761)]
-    [InlineData(SstvMode.Radiofax120Ioc576, 1727, 64)]
-    [InlineData(SstvMode.Radiofax120Ioc576, 1728, 63)]
-    [InlineData(SstvMode.Radiofax120Ioc576, 1728, 3521)]
+    [InlineData(SstvMode.Radiofax120Ioc288Sync20Ms, 863, 32)]
+    [InlineData(SstvMode.Radiofax120Ioc288Sync20Ms, 864, 31)]
+    [InlineData(SstvMode.Radiofax120Ioc288Sync20Ms, 864, 1761)]
+    [InlineData(SstvMode.Radiofax120Ioc576Sync20Ms, 1727, 64)]
+    [InlineData(SstvMode.Radiofax120Ioc576Sync20Ms, 1728, 63)]
+    [InlineData(SstvMode.Radiofax120Ioc576Sync20Ms, 1728, 3521)]
     public void Radiofax_options_reject_dimensions_outside_mode_limits(
         SstvMode mode,
         int width,

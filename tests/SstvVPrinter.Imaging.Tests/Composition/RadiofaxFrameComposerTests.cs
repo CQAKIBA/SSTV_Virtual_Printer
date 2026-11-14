@@ -17,12 +17,12 @@ public sealed class RadiofaxFrameComposerTests
     {
         var frame = new RadiofaxFrameComposer().Compose(
             SolidPage(width, height, new(255, 0, 0)),
-            Request(SstvMode.Radiofax120Ioc288));
+            Request(SstvMode.Radiofax120Ioc288Sync20Ms));
 
         var expectedBodyHeight = (int)Math.Round(864.0 * height / width, MidpointRounding.AwayFromZero);
         Assert.Equal(864, frame.Width);
-        Assert.Equal(32 + expectedBodyHeight, frame.Height);
-        Assert.Equal(new Rgb24(77, 77, 77), frame.GetPixel(432, 32 + (expectedBodyHeight / 2)));
+        Assert.Equal(expectedBodyHeight, frame.Height);
+        Assert.Equal(new Rgb24(77, 77, 77), frame.GetPixel(432, 32 + ((expectedBodyHeight - 32) / 2)));
     }
 
     [Theory]
@@ -35,25 +35,36 @@ public sealed class RadiofaxFrameComposerTests
         var exception = Assert.Throws<RadiofaxPageShapeException>(() =>
             new RadiofaxFrameComposer().Compose(
                 SolidPage(width, height, new(1, 2, 3)),
-                Request(SstvMode.Radiofax120Ioc288)));
+                Request(SstvMode.Radiofax120Ioc288Sync20Ms)));
 
         Assert.Contains("1:2", exception.Message, StringComparison.Ordinal);
     }
 
     [Theory]
-    [InlineData(SstvMode.Radiofax120Ioc288, 864, 32, 1728)]
-    [InlineData(SstvMode.Radiofax120Ioc576, 1728, 64, 3456)]
+    [InlineData(SstvMode.Radiofax120Ioc288Sync20Ms, 864, 1728)]
+    [InlineData(SstvMode.Radiofax120Ioc576Sync20Ms, 1728, 3456)]
     public void Compose_uses_mode_width_header_and_maximum_body(
         SstvMode mode,
         int expectedWidth,
-        int headerHeight,
         int maximumBodyHeight)
     {
         var frame = new RadiofaxFrameComposer().Compose(SolidPage(1, 2, new(8, 8, 8)), Request(mode));
 
         Assert.Equal(expectedWidth, frame.Width);
-        Assert.Equal(headerHeight + maximumBodyHeight, frame.Height);
+        Assert.Equal(maximumBodyHeight, frame.Height);
         new TransmissionEncodeOptions(mode).Validate(frame);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public void Header_placement_never_extends_receiver_visible_page(int placement)
+    {
+        var frame = new RadiofaxFrameComposer().Compose(
+            SolidPage(210, 297, new(90, 90, 90)),
+            new(SstvMode.Radiofax120Ioc576Sync20Ms, 1, "JA1UMW", DateTimeOffset.UnixEpoch, (HeaderPlacement)placement));
+
+        Assert.Equal((int)Math.Round(1728.0 * 297 / 210, MidpointRounding.AwayFromZero), frame.Height);
     }
 
     [Fact]
@@ -64,7 +75,7 @@ public sealed class RadiofaxFrameComposerTests
 
         Assert.Throws<OperationCanceledException>(() => composer.Compose(
             SolidPage(2, 1, new(10, 20, 30)),
-            Request(SstvMode.Radiofax120Ioc288),
+            Request(SstvMode.Radiofax120Ioc288Sync20Ms),
             cancellation.Token));
     }
 
@@ -76,10 +87,10 @@ public sealed class RadiofaxFrameComposerTests
         var sstv = composer.Compose(SolidPage(2, 1, new(9, 8, 7)),
             new(SstvMode.Scottie2, 1, "JA1UMW", DateTimeOffset.UnixEpoch));
         var fax = composer.Compose(SolidPage(2, 1, new(9, 8, 7)),
-            Request(SstvMode.Radiofax120Ioc288));
+            Request(SstvMode.Radiofax120Ioc288Sync20Ms));
 
         Assert.Equal((320, 256), (sstv.Width, sstv.Height));
-        Assert.Equal((864, 464), (fax.Width, fax.Height));
+        Assert.Equal((864, 432), (fax.Width, fax.Height));
     }
 
     private static CompositionRequest Request(SstvMode mode) =>

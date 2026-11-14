@@ -3,6 +3,8 @@ using Avalonia.Interactivity;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
+using Avalonia.Data.Converters;
+using SstvVPrinter.Desktop.Ptt;
 using SstvVPrinter.Desktop.Imaging;
 using SstvVPrinter.Desktop.ViewModels;
 
@@ -10,12 +12,30 @@ namespace SstvVPrinter.Desktop.Views;
 
 public sealed partial class MainWindow : Window
 {
+    public static readonly FuncValueConverter<PttControlMethod, string> PttMethodDisplayConverter =
+        new(method => method.ToString().ToUpperInvariant());
+
     private bool _printerOperationRunning;
+    private bool _manualPttHeld;
+    private Key? _manualPttKey;
+    private IPointer? _manualPttPointer;
+    private long _manualPttGeneration;
     public MainWindow()
     {
         AvaloniaXamlLoader.Load(this);
+        // Handle momentary input before Button consumes Enter or captures the pointer.
+        var pttButton = this.FindControl<Button>("PttButton")!;
+        pttButton.RemoveHandler(PointerPressedEvent, OnPttPointerPressed);
+        pttButton.RemoveHandler(PointerReleasedEvent, OnPttPointerReleased);
+        pttButton.RemoveHandler(KeyDownEvent, OnPttKeyDown);
+        pttButton.RemoveHandler(KeyUpEvent, OnPttKeyUp);
+        pttButton.AddHandler(PointerPressedEvent, OnPttPointerPressed, RoutingStrategies.Tunnel);
+        pttButton.AddHandler(PointerReleasedEvent, OnPttPointerReleased, RoutingStrategies.Tunnel);
+        pttButton.AddHandler(KeyDownEvent, OnPttKeyDown, RoutingStrategies.Tunnel);
+        pttButton.AddHandler(KeyUpEvent, OnPttKeyUp, RoutingStrategies.Tunnel);
         DataContextChanged += (_, _) => AttachViewModel();
         SizeChanged += (_, _) => ApplyResponsiveLayout();
+        Deactivated += async (_, _) => await ReleaseManualPttAsync();
         Closing += (_, args) =>
         {
             if (!AllowExplicitClose)
@@ -37,6 +57,86 @@ public sealed partial class MainWindow : Window
     public Func<Task>? RegisterPrinterRequested { get; set; }
     public Func<Task>? RepairPrinterRequested { get; set; }
     public Func<Task>? CallSignCommitRequested { get; set; }
+    public Func<Task>? PttPortsRefreshRequested { get; set; }
+    public Func<Task>? PttOpenCloseRequested { get; set; }
+    public Func<Task>? ManualPttPressed { get; set; }
+    public Func<Task>? ManualPttReleased { get; set; }
+
+    private async void OnPttPortDropDownOpened(object? sender, EventArgs args)
+    {
+        if (PttPortsRefreshRequested is not null) await PttPortsRefreshRequested();
+    }
+
+    private async void OnPttOpenCloseClick(object? sender, RoutedEventArgs args)
+    {
+        if (PttOpenCloseRequested is not null) await PttOpenCloseRequested();
+    }
+
+    private async void OnPttPointerPressed(object? sender, PointerPressedEventArgs args)
+    {
+        if (sender is not Button { IsEffectivelyEnabled: true } button
+            || !args.GetCurrentPoint(button).Properties.IsLeftButtonPressed || _manualPttHeld) return;
+        args.Handled = true;
+        button.Focus();
+        _manualPttHeld = true;
+        _manualPttPointer = args.Pointer;
+        args.Pointer.Capture(button);
+        await BeginManualPttAsync();
+    }
+
+    private async void OnPttPointerReleased(object? sender, PointerReleasedEventArgs args)
+    {
+        if (args.InitialPressMouseButton != MouseButton.Left) return;
+        args.Handled = true;
+        await ReleaseManualPttAsync();
+    }
+
+    private async void OnPttPointerCaptureLost(object? sender, PointerCaptureLostEventArgs args) =>
+        await ReleaseManualPttAsync();
+
+    private async void OnPttKeyDown(object? sender, KeyEventArgs args)
+    {
+        if (args.Key is not (Key.Space or Key.Enter)) return;
+        args.Handled = true;
+        if (_manualPttHeld || sender is not Button { IsEffectivelyEnabled: true }) return;
+        _manualPttHeld = true;
+        _manualPttKey = args.Key;
+        await BeginManualPttAsync();
+    }
+
+    private async Task BeginManualPttAsync()
+    {
+        var generation = ++_manualPttGeneration;
+        try
+        {
+            if (ManualPttPressed is not null) await ManualPttPressed();
+        }
+        catch (Exception)
+        {
+            // The delegate owns error reporting; failed/canceled presses still relinquish input.
+            if (generation == _manualPttGeneration) await ReleaseManualPttAsync();
+        }
+    }
+
+    private async void OnPttKeyUp(object? sender, KeyEventArgs args)
+    {
+        if (args.Key is not (Key.Space or Key.Enter)) return;
+        args.Handled = true;
+        if (_manualPttKey == args.Key) await ReleaseManualPttAsync();
+    }
+
+    private async void OnPttLostFocus(object? sender, RoutedEventArgs args) => await ReleaseManualPttAsync();
+
+    private Task ReleaseManualPttAsync()
+    {
+        if (!_manualPttHeld) return Task.CompletedTask;
+        _manualPttHeld = false;
+        _manualPttKey = null;
+        var pointer = _manualPttPointer;
+        _manualPttPointer = null;
+        pointer?.Capture(null);
+        return ManualPttReleased?.Invoke() ?? Task.CompletedTask;
+    }
 
     private async void OnCallSignKeyDown(object? sender, KeyEventArgs args)
     {

@@ -6,8 +6,32 @@ namespace SstvVPrinter.Sstv.Tests;
 public sealed class RadiofaxPlannerTests
 {
     [Theory]
-    [InlineData(SstvMode.Radiofax120Ioc288, 675, 6750, 864, 32)]
-    [InlineData(SstvMode.Radiofax120Ioc576, 300, 3000, 1728, 64)]
+    [InlineData((SstvMode)4, 0.00625, 0.010)]
+    [InlineData((SstvMode)5, 0.00125, 0.020)]
+    [InlineData((SstvMode)6, 0.00625, 0.010)]
+    [InlineData((SstvMode)7, 0.00125, 0.020)]
+    public void Plan_centers_selected_sync_pulse_inside_dead_sector(
+        SstvMode mode,
+        double expectedWhiteSeconds,
+        double expectedBlackSeconds)
+    {
+        var definition = RadiofaxModes.Get(mode);
+        var frame = GrayFrame(definition.ActiveWidth, definition.HeaderHeight);
+        var spans = RadiofaxPlanner.Plan(frame, new RadiofaxEncodeOptions(mode)).ToArray();
+        var firstImageSpan = (int)(5 * definition.IocSelectionHz * 2) + 120;
+
+        Assert.Equal(2300, spans[firstImageSpan].FrequencyHz);
+        Assert.Equal(expectedWhiteSeconds, spans[firstImageSpan].DurationSeconds, 12);
+        Assert.Equal(1500, spans[firstImageSpan + 1].FrequencyHz);
+        Assert.Equal(expectedBlackSeconds, spans[firstImageSpan + 1].DurationSeconds, 12);
+        Assert.Equal(2300, spans[firstImageSpan + 2].FrequencyHz);
+        Assert.Equal(expectedWhiteSeconds, spans[firstImageSpan + 2].DurationSeconds, 12);
+        Assert.Equal(0.0225, spans[firstImageSpan..(firstImageSpan + 3)].Sum(span => span.DurationSeconds), 12);
+    }
+
+    [Theory]
+    [InlineData(SstvMode.Radiofax120Ioc288Sync20Ms, 675, 6750, 864, 32)]
+    [InlineData(SstvMode.Radiofax120Ioc576Sync20Ms, 300, 3000, 1728, 64)]
     public void Plan_emits_wmo_control_sections_and_exact_half_second_lines(
         SstvMode mode,
         double selectorHz,
@@ -42,11 +66,11 @@ public sealed class RadiofaxPlannerTests
             var lineSpans = spans[(imageStart + (line * (width + 3)))..(imageStart + ((line + 1) * (width + 3)))];
             Assert.Equal(0.5, lineSpans.Sum(span => span.DurationSeconds), 9);
             Assert.Equal(2300, lineSpans[0].FrequencyHz);
-            Assert.Equal(0.005625, lineSpans[0].DurationSeconds, 12);
+            Assert.Equal(0.00125, lineSpans[0].DurationSeconds, 12);
             Assert.Equal(1500, lineSpans[1].FrequencyHz);
-            Assert.Equal(0.01125, lineSpans[1].DurationSeconds, 12);
+            Assert.Equal(0.020, lineSpans[1].DurationSeconds, 12);
             Assert.Equal(2300, lineSpans[2].FrequencyHz);
-            Assert.Equal(0.005625, lineSpans[2].DurationSeconds, 12);
+            Assert.Equal(0.00125, lineSpans[2].DurationSeconds, 12);
             Assert.Equal(0.4775, lineSpans[3..].Sum(span => span.DurationSeconds), 9);
         }
 
@@ -69,7 +93,7 @@ public sealed class RadiofaxPlannerTests
         SetGray(pixels, width, 2, 0, 255);
         var spans = RadiofaxPlanner.Plan(
             RgbFrame.Create(width, height, pixels),
-            new RadiofaxEncodeOptions(SstvMode.Radiofax120Ioc288),
+            new RadiofaxEncodeOptions(SstvMode.Radiofax120Ioc288Sync20Ms),
             CancellationToken.None).ToArray();
         const int firstImageSpan = 6750 + 120;
 
@@ -84,7 +108,7 @@ public sealed class RadiofaxPlannerTests
     [Fact]
     public void Plan_observes_cancellation_during_enumeration()
     {
-        var options = new RadiofaxEncodeOptions(SstvMode.Radiofax120Ioc288);
+        var options = new RadiofaxEncodeOptions(SstvMode.Radiofax120Ioc288Sync20Ms);
         using var cancellation = new CancellationTokenSource();
         var enumerator = RadiofaxPlanner.Plan(GrayFrame(864, 32), options, cancellation.Token).GetEnumerator();
         Assert.True(enumerator.MoveNext());
