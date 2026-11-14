@@ -457,6 +457,21 @@ public sealed class MainWindowViewModelTests
         Assert.InRange(model.ScanLineY, 254, 257);
     }
 
+    [Fact]
+    public void Empty_preview_prompts_for_call_sign_when_a_job_is_selected()
+    {
+        var model = new MainWindowViewModel(new ControlledPreparationService());
+        Assert.Equal("印刷を待っています", model.EmptyPreviewText);
+        model.SelectedJob = CreateJob();
+        Assert.Equal("コールサインが未入力です", model.EmptyPreviewText);
+        model.CallSign = "JA1UMW";
+        Assert.Equal("印刷を待っています", model.EmptyPreviewText);
+        model.CallSign = " ";
+        Assert.Equal("コールサインが未入力です", model.EmptyPreviewText);
+        model.ClearPreview();
+        Assert.Equal("印刷を待っています", model.EmptyPreviewText);
+    }
+
     private static PrintJob CreateJob() =>
         new(
             Guid.NewGuid(), "Paint", DateTimeOffset.UtcNow,

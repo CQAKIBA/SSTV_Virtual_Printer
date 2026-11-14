@@ -42,7 +42,7 @@
                 </Border>
               </Grid>
             </Viewbox>
-            <TextBlock Text="印刷を待っています" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#697789" IsVisible="{Binding IsPreviewEmpty}" />
+            <TextBlock Text="{Binding EmptyPreviewText}" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#697789" IsVisible="{Binding IsPreviewEmpty}" />
           </Grid>
         </Border>
         <Border Grid.Row="1" AutomationProperties.Name="Print job queue" Background="#171E28" CornerRadius="8" Padding="12">

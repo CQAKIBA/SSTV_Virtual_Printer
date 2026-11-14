@@ -189,6 +189,9 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
     public bool IsHorizontalMultiplierEnabled => !IsRadiofaxMode;
     public int StoredHorizontalSampleMultiplier => _isDoubleHorizontal ? 2 : 1;
     public bool IsPreviewEmpty => PreviewBitmap is null;
+    public string EmptyPreviewText => SelectedJob is not null && string.IsNullOrWhiteSpace(CallSign)
+        ? "コールサインが未入力です"
+        : "印刷を待っています";
     public double PreviewWidth => Preview?.Frame.Width ?? 1;
     public double PreviewHeight => Preview is { } preview
         ? preview.Frame.Height * preview.Options.HorizontalSampleMultiplier
@@ -359,7 +362,13 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
         NotifyActionState();
     }
     partial void OnIsSelectedJobActiveChanged(bool value) => NotifyActionState();
-    partial void OnSelectedJobChanged(PrintJob? value) => NotifyActionState();
+    partial void OnCallSignChanged(string value) => OnPropertyChanged(nameof(EmptyPreviewText));
+
+    partial void OnSelectedJobChanged(PrintJob? value)
+    {
+        OnPropertyChanged(nameof(EmptyPreviewText));
+        NotifyActionState();
+    }
     partial void OnIsSettingsLockedChanged(bool value) => NotifyPttState();
     partial void OnIsPttConnectionPendingChanged(bool value) => NotifyPttState();
     partial void OnIsManualPttPendingChanged(bool value) => NotifyPttState();
