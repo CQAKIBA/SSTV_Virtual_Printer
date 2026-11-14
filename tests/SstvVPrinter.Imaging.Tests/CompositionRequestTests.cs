@@ -15,7 +15,19 @@ public sealed class CompositionRequestTests
         var request = new CompositionRequest(mode, multiplier, "ja1umw", DateTimeOffset.UnixEpoch);
 
         Assert.Equal("JA1UMW", request.CallSign);
-        Assert.Equal(HeaderPlacement.Top, request.Placement);
+        Assert.Equal((HeaderPlacement)0, request.Placement);
+    }
+
+    [Theory]
+    [InlineData(SstvMode.Radiofax120Ioc288Sync20Ms)]
+    [InlineData(SstvMode.Radiofax120Ioc576Sync20Ms)]
+    public void Constructor_accepts_radiofax_only_at_effective_multiplier_one(SstvMode mode)
+    {
+        var request = new CompositionRequest(mode, 1, "ja1umw", DateTimeOffset.UnixEpoch);
+
+        Assert.Equal(mode, request.Mode);
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new CompositionRequest(mode, 2, "ja1umw", DateTimeOffset.UnixEpoch));
     }
 
     [Theory]
@@ -49,7 +61,16 @@ public sealed class CompositionRequestTests
     }
 
     [Fact]
-    public void Constructor_rejects_non_top_placement() =>
+    public void Constructor_rejects_unknown_placement() =>
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             new CompositionRequest(SstvMode.Martin1, 1, "JA1UMW", DateTimeOffset.UnixEpoch, (HeaderPlacement)999));
+
+    [Fact]
+    public void Constructor_accepts_overlay_placement()
+    {
+        var request = new CompositionRequest(
+            SstvMode.Scottie2, 1, "JA1UMW", DateTimeOffset.UnixEpoch, (HeaderPlacement)1);
+
+        Assert.Equal((HeaderPlacement)1, request.Placement);
+    }
 }

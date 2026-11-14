@@ -37,6 +37,19 @@ public sealed class SstvFrameComposerTests
     }
 
     [Fact]
+    public void Overlay_header_uses_full_fixed_height_for_page_content()
+    {
+        var color = new Rgb24(20, 40, 60);
+        var frame = new SstvFrameComposer().Compose(
+            SolidPage(320, 256, color),
+            new(SstvMode.Scottie2, 1, "JA1UMW", DateTimeOffset.UnixEpoch, (HeaderPlacement)1));
+
+        Assert.Equal(256, frame.Height);
+        Assert.Equal(new Rgb24(137, 147, 157), frame.GetPixel(319, 15));
+        Assert.Equal(color, frame.GetPixel(319, 16));
+    }
+
+    [Fact]
     public void Double_horizontal_mode_preserves_display_aspect_while_using_all_samples()
     {
         var color = new Rgb24(70, 80, 90);
@@ -62,19 +75,19 @@ public sealed class SstvFrameComposerTests
     [Theory]
     [InlineData(1, 320)]
     [InlineData(2, 640)]
-    public void Robot36_uses_padding_only_when_top_gap_is_at_least_sixteen(int multiplier, int width)
+    public void Robot36_reserves_header_space_when_selected(int multiplier, int width)
     {
         var composer = new SstvFrameComposer();
         var padded = composer.Compose(SolidPage(width / multiplier, 208, new(11, 21, 31)),
             new(SstvMode.Robot36, multiplier, "JA1UMW", DateTimeOffset.UnixEpoch));
-        var overlaid = composer.Compose(SolidPage(width / multiplier, 210, new(11, 21, 31)),
+        var second = composer.Compose(SolidPage(width / multiplier, 210, new(11, 21, 31)),
             new(SstvMode.Robot36, multiplier, "JA1UMW", DateTimeOffset.UnixEpoch));
 
         Assert.Equal(width, padded.Width);
         Assert.Equal(240, padded.Height);
         Assert.Equal(new Rgb24(255, 255, 255), padded.GetPixel(width - 1, 15));
-        Assert.Equal(new Rgb24(133, 138, 143), overlaid.GetPixel(width - 1, 15));
-        Assert.Equal(new Rgb24(11, 21, 31), padded.GetPixel(width / 2, 16));
+        Assert.Equal(new Rgb24(255, 255, 255), second.GetPixel(width - 1, 15));
+        Assert.Equal(new Rgb24(11, 21, 31), padded.GetPixel(width / 2, 24));
         new SstvEncodeOptions(SstvMode.Robot36, multiplier).Validate(padded);
     }
 
@@ -82,7 +95,7 @@ public sealed class SstvFrameComposerTests
     public void Robot36_overlay_uses_integer_half_white_and_opaque_foreground()
     {
         var frame = new SstvFrameComposer().Compose(SolidPage(320, 240, new(10, 11, 12)),
-            new(SstvMode.Robot36, 1, "JA1UMW", DateTimeOffset.UnixEpoch));
+            new(SstvMode.Robot36, 1, "JA1UMW", DateTimeOffset.UnixEpoch, HeaderPlacement.Overlay));
         Assert.Equal(new Rgb24(255, 0, 0), frame.GetPixel(0, 0));
         Assert.Equal(new Rgb24(132, 133, 133), frame.GetPixel(319, 15));
         Assert.Equal(new Rgb24(10, 11, 12), frame.GetPixel(319, 16));

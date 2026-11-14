@@ -2,6 +2,8 @@
     x:Class="SstvVPrinter.Desktop.Views.MainWindow"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:converters="using:SstvVPrinter.Desktop.Converters"
+    xmlns:views="using:SstvVPrinter.Desktop.Views"
     Title="SSTV Virtual Printer"
     Width="1100"
     Height="720"
@@ -10,6 +12,9 @@
     Background="{DynamicResource AppBackgroundBrush}"
     Foreground="White"
     x:CompileBindings="False">
+  <Window.Resources>
+    <converters:TransmissionModeDisplayConverter x:Key="TransmissionModeDisplayConverter" />
+  </Window.Resources>
   <Grid Name="RootLayout" RowDefinitions="Auto,*">
     <Menu Grid.Row="0" Background="#171E28">
       <MenuItem Header="ファイル(_F)">
@@ -27,29 +32,81 @@
       <Grid Grid.Column="0" RowDefinitions="*,Auto" RowSpacing="12">
         <Border AutomationProperties.Name="SSTV preview" Background="#080B10" BorderBrush="#00E5FF" BorderThickness="2" CornerRadius="8" Padding="12">
           <Grid>
-            <Image Source="{Binding PreviewBitmap}" Stretch="Uniform" />
-            <TextBlock Text="印刷を待っています" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#697789" IsVisible="{Binding IsPreviewEmpty}" />
+            <Viewbox Stretch="Uniform">
+              <Grid Width="{Binding PreviewWidth}" Height="{Binding PreviewHeight}">
+                <Image Source="{Binding PreviewBitmap}" Stretch="Fill" />
+                <Border Name="TransmissionScanLine" Height="2" Background="#FFFF3030" VerticalAlignment="Top" IsVisible="{Binding IsScanLineVisible}" IsHitTestVisible="False">
+                  <Border.RenderTransform>
+                    <TranslateTransform Y="{Binding ScanLineY}" />
+                  </Border.RenderTransform>
+                </Border>
+              </Grid>
+            </Viewbox>
+            <TextBlock Text="{Binding EmptyPreviewText}" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#697789" IsVisible="{Binding IsPreviewEmpty}" />
           </Grid>
         </Border>
         <Border Grid.Row="1" AutomationProperties.Name="Print job queue" Background="#171E28" CornerRadius="8" Padding="12">
           <StackPanel Spacing="8">
             <TextBlock Text="PRINT QUEUE" Foreground="#FF27D8" FontWeight="Bold" />
-            <ListBox ItemsSource="{Binding WaitingJobs}" SelectedItem="{Binding SelectedJob}" MinHeight="72" MaxHeight="128" />
+            <Grid ColumnDefinitions="150,*,250" ColumnSpacing="10">
+              <TextBlock Text="日時" FontWeight="Bold" />
+              <TextBlock Grid.Column="1" Text="ソース名" FontWeight="Bold" />
+              <TextBlock Grid.Column="2" Text="UUID" FontWeight="Bold" />
+            </Grid>
+            <ListBox ItemsSource="{Binding WaitingJobs}" SelectedItem="{Binding SelectedJob}" MinHeight="72" MaxHeight="128">
+              <ListBox.Styles>
+                <Style Selector="ListBoxItem">
+                  <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                </Style>
+              </ListBox.Styles>
+              <ListBox.ItemTemplate>
+                <DataTemplate>
+                  <Grid ColumnDefinitions="150,*,250" ColumnSpacing="10">
+                    <TextBlock Text="{Binding AcceptedAt, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}" />
+                    <TextBlock Grid.Column="1" Text="{Binding SourceName}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Column="2" Text="{Binding Id}" FontFamily="Consolas" />
+                  </Grid>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
           </StackPanel>
         </Border>
       </Grid>
       <ScrollViewer Name="ControlPanel" Grid.Column="1" VerticalScrollBarVisibility="Auto">
         <StackPanel Spacing="12">
           <Border AutomationProperties.Name="Call sign" Classes="panel" IsEnabled="{Binding !IsSettingsLocked}"><StackPanel Spacing="6"><TextBlock Text="CALL SIGN" Classes="heading"/><TextBox Name="CallSignInput" Text="{Binding CallSign}" PlaceholderText="Enter your call sign" KeyDown="OnCallSignKeyDown" LostFocus="OnCallSignLostFocus"/></StackPanel></Border>
-          <Border AutomationProperties.Name="Hardware" Classes="panel" IsEnabled="{Binding !IsSettingsLocked}"><StackPanel Spacing="6"><TextBlock Text="HARDWARE" Classes="heading"/><ComboBox ItemsSource="{Binding AudioEndpoints}" SelectedItem="{Binding SelectedAudioEndpoint}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding DisplayName}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox><Grid AutomationProperties.Name="Master volume" ColumnDefinitions="72,*,42" ColumnSpacing="8"><TextBlock Text="マスター"/><ProgressBar Grid.Column="1" Value="{Binding MasterVolumePercent}" Maximum="100"/><TextBlock Grid.Column="2" Text="{Binding VolumeText}" HorizontalAlignment="Right"/></Grid><Grid AutomationProperties.Name="Application volume" ColumnDefinitions="72,*,42" ColumnSpacing="8" IsEnabled="{Binding IsAppVolumeActive}"><TextBlock Text="アプリ"/><ProgressBar Grid.Column="1" Value="{Binding AppVolumePercent}" Maximum="100"/><TextBlock Grid.Column="2" Text="{Binding AppVolumeText}" HorizontalAlignment="Right"/></Grid></StackPanel></Border>
-          <Border AutomationProperties.Name="Protocol" Classes="panel" IsEnabled="{Binding !IsSettingsLocked}"><StackPanel Spacing="6"><TextBlock Text="PROTOCOL" Classes="heading"/><ComboBox ItemsSource="{Binding AvailableModes}" SelectedItem="{Binding SelectedMode}"/><CheckBox Content="水平解像度 2x" IsChecked="{Binding IsDoubleHorizontal}"/><Grid ColumnDefinitions="*,64,*" ColumnSpacing="8"><Button Name="RotateCounterclockwiseButton" Content="−90°" Click="OnRotateCounterclockwiseClick"/><TextBlock Grid.Column="1" Text="{Binding RotationText}" HorizontalAlignment="Center" VerticalAlignment="Center"/><Button Name="RotateClockwiseButton" Grid.Column="2" Content="＋90°" Click="OnRotateClockwiseClick"/></Grid></StackPanel></Border>
+          <Border AutomationProperties.Name="Hardware" Classes="panel">
+            <StackPanel Spacing="6">
+              <TextBlock Text="HARDWARE" Classes="heading"/>
+              <ComboBox ItemsSource="{Binding AudioEndpoints}" SelectedItem="{Binding SelectedAudioEndpoint}" IsEnabled="{Binding !IsSettingsLocked}">
+                <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding DisplayName}"/></DataTemplate></ComboBox.ItemTemplate>
+              </ComboBox>
+              <Grid AutomationProperties.Name="Master volume" ColumnDefinitions="72,*,42" ColumnSpacing="8"><TextBlock Text="マスター"/><ProgressBar Grid.Column="1" Value="{Binding MasterVolumePercent}" Maximum="100"/><TextBlock Grid.Column="2" Text="{Binding VolumeText}" HorizontalAlignment="Right"/></Grid>
+              <Grid AutomationProperties.Name="Application volume" ColumnDefinitions="72,*,42" ColumnSpacing="8" IsEnabled="{Binding IsAppVolumeActive}"><TextBlock Text="アプリ"/><ProgressBar Grid.Column="1" Value="{Binding AppVolumePercent}" Maximum="100"/><TextBlock Grid.Column="2" Text="{Binding AppVolumeText}" HorizontalAlignment="Right"/></Grid>
+              <TextBlock Text="PTT PORT" Classes="heading" Margin="0,6,0,0"/>
+              <Grid ColumnDefinitions="*,90" ColumnSpacing="8">
+                <ComboBox Name="PttPortComboBox" ItemsSource="{Binding PttPorts}" SelectedItem="{Binding SelectedPttPort}" IsEnabled="{Binding CanEditPttSettings}" HorizontalAlignment="Stretch" DropDownOpened="OnPttPortDropDownOpened"/>
+                <Button Name="PttConnectionButton" Classes="ptt-state" Grid.Column="1" Content="{Binding PttConnectionButtonText}" Background="{Binding PttConnectionBrush}" IsEnabled="{Binding CanTogglePttConnection}" HorizontalContentAlignment="Center" Click="OnPttOpenCloseClick"/>
+              </Grid>
+              <Grid ColumnDefinitions="*,90" ColumnSpacing="8">
+                <ComboBox ItemsSource="{Binding PttMethods}" SelectedItem="{Binding SelectedPttMethod}" IsEnabled="{Binding CanEditPttSettings}" HorizontalAlignment="Stretch">
+                  <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Converter={x:Static views:MainWindow.PttMethodDisplayConverter}}"/></DataTemplate></ComboBox.ItemTemplate>
+                </ComboBox>
+                <Button Name="PttButton" Classes="ptt-state" Grid.Column="1" Content="PTT" Background="{Binding PttButtonBrush}" IsEnabled="{Binding CanPressPtt}" HorizontalContentAlignment="Center" PointerPressed="OnPttPointerPressed" PointerReleased="OnPttPointerReleased" PointerCaptureLost="OnPttPointerCaptureLost" KeyDown="OnPttKeyDown" KeyUp="OnPttKeyUp" LostFocus="OnPttLostFocus"/>
+              </Grid>
+            </StackPanel>
+          </Border>
+          <Border AutomationProperties.Name="Protocol" Classes="panel" IsEnabled="{Binding !IsSettingsLocked}"><StackPanel Spacing="6"><TextBlock Text="PROTOCOL" Classes="heading"/><ComboBox ItemsSource="{Binding AvailableModes}" SelectedItem="{Binding SelectedMode}" HorizontalAlignment="Stretch"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Converter={StaticResource TransmissionModeDisplayConverter}}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox><CheckBox Content="水平解像度 2x" IsChecked="{Binding IsDoubleHorizontal}" IsEnabled="{Binding IsHorizontalMultiplierEnabled}"/><CheckBox Content="ヘッダを画像に重ねる" IsChecked="{Binding IsHeaderOverlay}"/><Grid ColumnDefinitions="*,64,*" ColumnSpacing="8"><Button Name="RotateCounterclockwiseButton" Content="−90°" Click="OnRotateCounterclockwiseClick"/><TextBlock Grid.Column="1" Text="{Binding RotationText}" HorizontalAlignment="Center" VerticalAlignment="Center"/><Button Name="RotateClockwiseButton" Grid.Column="2" Content="＋90°" Click="OnRotateClockwiseClick"/></Grid></StackPanel></Border>
           <Border AutomationProperties.Name="Status" Classes="panel" BorderBrush="{Binding StatusBrush}"><StackPanel Spacing="6"><TextBlock Text="STATUS" Classes="heading"/><TextBlock Text="{Binding StatusText}" FontSize="18" FontWeight="Bold"/><ProgressBar Value="{Binding ProgressPercent}" Maximum="100"/><TextBlock Text="{Binding RemainingTimeText}"/><TextBlock Text="{Binding DeviceError}" Foreground="#FF3D21" TextWrapping="Wrap"/><TextBlock Text="{Binding ValidationError}" Foreground="#FFDF30" TextWrapping="Wrap"/></StackPanel></Border>
-          <Border AutomationProperties.Name="Actions" Classes="panel"><StackPanel Spacing="8"><TextBlock Text="{Binding MuteWarning}" Foreground="#FFDF30" FontWeight="Bold" FontSize="18" TextWrapping="Wrap"/><Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,*" RowSpacing="8" ColumnSpacing="8"><Button Content="送信" IsEnabled="{Binding CanSend}" Classes="send" Click="OnSendClick"/><Button Grid.Column="1" Content="WAV保存" IsEnabled="{Binding CanSaveWave}" Click="OnSaveWaveClick"/><Button Grid.Row="1" Content="破棄" IsEnabled="{Binding CanDiscard}" Click="OnDiscardClick"/><Button Grid.Row="1" Grid.Column="1" Content="停止" IsEnabled="{Binding CanStop}" Classes="stop" Click="OnStopClick"/></Grid></StackPanel></Border>
+          <Border AutomationProperties.Name="Actions" Classes="panel"><StackPanel Spacing="8"><TextBlock Text="{Binding MuteWarning}" Foreground="#FFDF30" FontWeight="Bold" FontSize="18" TextWrapping="Wrap"/><Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,*" RowSpacing="8" ColumnSpacing="8"><Button Content="送信" IsEnabled="{Binding CanSend}" Classes="send" Click="OnSendClick"/><Button Grid.Column="1" Content="WAV保存" IsEnabled="{Binding CanSaveWave}" Click="OnSaveWaveClick"/><Button Grid.Row="1" Content="破棄" IsEnabled="{Binding CanDiscard}" Click="OnDiscardClick"/><Button Grid.Row="1" Grid.Column="1" Content="停止" IsEnabled="{Binding CanStop}" Classes="stop" Click="OnStopClick"/></Grid><CheckBox Content="送信完了後に削除" IsChecked="{Binding DeleteAfterSend}"/></StackPanel></Border>
         </StackPanel>
       </ScrollViewer>
     </Grid>
   </Grid>
   <Window.Styles>
+    <Style Selector="Button.ptt-state:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.ptt-state:pressed /template/ ContentPresenter#PART_ContentPresenter, Button.ptt-state:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{Binding Background, RelativeSource={RelativeSource TemplatedParent}}"/>
+    </Style>
     <Style Selector="Border.panel"><Setter Property="Background" Value="#171E28"/><Setter Property="BorderBrush" Value="#344050"/><Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="8"/><Setter Property="Padding" Value="14"/></Style>
     <Style Selector="TextBlock.heading"><Setter Property="Foreground" Value="#00E5FF"/><Setter Property="FontWeight" Value="Bold"/></Style>
     <Style Selector="Button.send"><Setter Property="Background" Value="#00E5FF"/><Setter Property="Foreground" Value="#061014"/><Setter Property="FontWeight" Value="Bold"/></Style>

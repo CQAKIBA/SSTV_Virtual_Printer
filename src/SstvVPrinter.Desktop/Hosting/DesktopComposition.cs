@@ -6,6 +6,7 @@ using SstvVPrinter.App.Jobs;
 using SstvVPrinter.App.Settings;
 using SstvVPrinter.App.Transmission;
 using SstvVPrinter.Desktop.Platforms.Windows;
+using SstvVPrinter.Desktop.Ptt;
 using SstvVPrinter.Desktop.ViewModels;
 using SstvVPrinter.Desktop.Views;
 using SstvVPrinter.Imaging.Composition;
@@ -20,18 +21,25 @@ public sealed class DesktopComposition : IAsyncDisposable
     private readonly TransmissionController _transmission;
     private readonly IUserPreferencesStore _preferencesStore;
     private readonly IAudioEndpointMonitor _audioMonitor;
+    private readonly IPttPlatform _pttPlatform;
+    private readonly PttController _ptt;
+    private CancellationTokenSource _pttOperations = new();
     private readonly CancellationTokenSource _shutdown = new();
     private readonly object _preferenceGate = new();
+    private readonly object _disposalGate = new();
     private Task _preferenceSaveTask = Task.CompletedTask;
+    private Task? _disposalTask;
     private Task? _audioWatchTask;
     private Guid? _preparedJobId;
     private string _committedCallSign;
     private bool _updatingSelection;
+    private bool _refreshingPttSelection;
+    private int _pendingManualPttPresses;
     private readonly object _queueIdentityGate = new();
     private HashSet<Guid> _knownJobIds = [];
     private int _disposed;
 
-    private DesktopComposition(DesktopHost host, MainWindowViewModel viewModel, PrintJobQueue queue, TransmissionController transmission, IUserPreferencesStore preferencesStore, IAudioEndpointMonitor audioMonitor, ApplicationMenuViewModel menu, string committedCallSign)
+    private DesktopComposition(DesktopHost host, MainWindowViewModel viewModel, PrintJobQueue queue, TransmissionController transmission, IUserPreferencesStore preferencesStore, IAudioEndpointMonitor audioMonitor, ApplicationMenuViewModel menu, string committedCallSign, IPttPlatform pttPlatform)
     {
         _host = host;
         ViewModel = viewModel;
@@ -39,6 +47,8 @@ public sealed class DesktopComposition : IAsyncDisposable
         _transmission = transmission;
         _preferencesStore = preferencesStore;
         _audioMonitor = audioMonitor;
+        _pttPlatform = pttPlatform;
+        _ptt = new PttController(pttPlatform);
         Menu = menu;
         _committedCallSign = committedCallSign;
     }
@@ -47,20 +57,28 @@ public sealed class DesktopComposition : IAsyncDisposable
     public PrintJobQueue Queue { get; }
     public ApplicationMenuViewModel Menu { get; }
 
-    public static async Task<DesktopComposition> CreateAsync(MainWindow window, IClassicDesktopStyleApplicationLifetime lifetime, CancellationToken cancellationToken = default)
+    public static async Task<DesktopComposition> CreateAsync(
+        MainWindow window, IClassicDesktopStyleApplicationLifetime lifetime, CancellationToken cancellationToken = default,
+        IUserPreferencesStore? preferencesStore = null, IAudioEndpointMonitor? audio = null,
+        TransmissionController? transmission = null, IPttPlatform? pttPlatform = null, DesktopHost? host = null)
     {
-        IUserPreferencesStore preferencesStore = new JsonUserPreferencesStore();
+        preferencesStore ??= new JsonUserPreferencesStore();
         var preferences = await preferencesStore.LoadAsync(cancellationToken);
         var queue = new PrintJobQueue();
-        var viewModel = new MainWindowViewModel(new TransmissionPreparationService(new SstvFrameComposer()))
+        var viewModel = new MainWindowViewModel(new TransmissionPreparationService(new TransmissionFrameComposer()))
         {
             CallSign = preferences.CallSign,
             SelectedMode = preferences.Mode,
             IsDoubleHorizontal = preferences.HorizontalSampleMultiplier == 2,
             RotationDegrees = preferences.RotationDegrees,
             StartAtSignIn = preferences.StartAtSignIn,
+            HeaderOverlayModeMask = preferences.HeaderOverlayModeMask,
+            DeleteAfterSend = preferences.DeleteAfterSend,
+            SelectedPttPort = preferences.PttPortName ?? "N/A",
+            SelectedPttMethod = string.Equals(preferences.PttMethod, "DTR", StringComparison.OrdinalIgnoreCase)
+                ? PttControlMethod.Dtr : PttControlMethod.Rts,
         };
-        IAudioEndpointMonitor audio = new WindowsAudioEndpointMonitor();
+        audio ??= new WindowsAudioEndpointMonitor();
         var endpoints = await audio.GetEndpointsAsync(cancellationToken);
         viewModel.AudioEndpoints = endpoints;
         viewModel.SelectedAudioEndpoint = endpoints.FirstOrDefault(item => item.Id == preferences.AudioEndpointId)
@@ -68,9 +86,13 @@ public sealed class DesktopComposition : IAsyncDisposable
             ?? endpoints.FirstOrDefault();
         ApplyEndpointState(viewModel);
 
-        var sink = new PwgPrintJobSink(queue, new PwgRasterDecoder());
-        var webApplication = ProbeApplication.Build(sink, 8631);
-        var transmission = new TransmissionController(new TransmissionArtifactService(), new NaudioWavePlaybackService());
+        if (host is null)
+        {
+            var sink = new PwgPrintJobSink(queue, new PwgRasterDecoder());
+            var webApplication = ProbeApplication.Build(sink, 8631);
+            host = new DesktopHost([new WebApplicationHostedService(webApplication)]);
+        }
+        transmission ??= new TransmissionController(new TransmissionArtifactService(), new NaudioWavePlaybackService());
         DesktopComposition? composition = null;
         var lifetimeService = new AvaloniaApplicationLifetimeService(
             lifetime,
@@ -87,10 +109,12 @@ public sealed class DesktopComposition : IAsyncDisposable
             new WindowsPrinterRegistrationService(new ProcessRunner()),
             () => queue.Active is not null);
         composition = new DesktopComposition(
-            new DesktopHost([new WebApplicationHostedService(webApplication)]), viewModel, queue, transmission, preferencesStore, audio, menu, preferences.CallSign);
+            host, viewModel, queue, transmission, preferencesStore, audio, menu, preferences.CallSign,
+            pttPlatform ?? new WindowsPttPlatform());
         composition.WireWindow(window);
         queue.Changed += composition.OnQueueChanged;
         composition.WirePreferencePersistence();
+        await composition.RunPttOperationAsync(() => composition.RefreshPttPortsAsync(cancellationToken));
         return composition;
     }
 
@@ -115,42 +139,61 @@ public sealed class DesktopComposition : IAsyncDisposable
 
     private void WireWindow(MainWindow window)
     {
+        _ptt.StateChanged += OnPttStateChanged;
+        window.PttPortsRefreshRequested = () => RunPttOperationAsync(() => RefreshPttPortsAsync(_pttOperations.Token));
+        window.PttOpenCloseRequested = () => RunPttOperationAsync(TogglePttConnectionAsync);
+        window.ManualPttPressed = () => RunPttOperationAsync(BeginManualPttAsync);
+        window.ManualPttReleased = () => RunPttOperationAsync(() => _ptt.EndManualAsync());
         _transmission.StateChanged += state => Dispatcher.UIThread.Post(() =>
             ViewModel.ApplyTransmissionState(state, _transmission.Progress, Remaining()));
         _transmission.ProgressChanged += progress => Dispatcher.UIThread.Post(() =>
             ViewModel.ApplyTransmissionState(_transmission.State, progress, Remaining()));
         window.SendRequested = async () =>
         {
+            if (Volatile.Read(ref _disposed) != 0) return;
             if (ViewModel.Preview is not { } preview || ViewModel.SelectedAudioEndpoint is not { } endpoint) return;
             if (Queue.Active is not { } active || Queue.Selected?.Id != active.Id) return;
             try
             {
-                await _transmission.SendAsync(preview, endpoint.Id, _shutdown.Token);
-                if (_transmission.State == JobState.Completed) Queue.CompleteActive();
+                ITransmissionGate gate = HasSelectedPttPort
+                    ? new SerialPttTransmissionGate(_ptt, _pttPlatform, ViewModel.SelectedPttPort!, ViewModel.SelectedPttMethod)
+                    : NoOpTransmissionGate.Instance;
+                await _transmission.SendAsync(preview, endpoint.Id, gate, _shutdown.Token);
+                if (_transmission.State == JobState.Completed)
+                    TransmissionCompletionPolicy.Apply(Queue, ViewModel.DeleteAfterSend);
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+            catch (OperationCanceledException) { }
+            catch (Exception exception)
             {
                 ViewModel.ValidationError = $"送信に失敗しました: {exception.Message}";
             }
         };
         window.SaveWaveRequested = async path =>
         {
+            if (Volatile.Read(ref _disposed) != 0) return;
             if (ViewModel.Preview is not { } preview) return;
             if (Queue.Active is not { } active || Queue.Selected?.Id != active.Id) return;
             try
             {
                 await _transmission.SaveWaveAsync(preview, path, _shutdown.Token);
-                Queue.CompleteActive();
+                TransmissionCompletionPolicy.Apply(Queue, ViewModel.DeleteAfterSend);
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+            catch (OperationCanceledException) { }
+            catch (Exception exception)
             {
                 ViewModel.ValidationError = $"WAV保存に失敗しました: {exception.Message}";
             }
         };
         window.StopRequested = () =>
         {
+            if (Volatile.Read(ref _disposed) != 0) return;
             ViewModel.CancelPreparation();
             _transmission.Stop();
+            var canceled = _pttOperations;
+            _pttOperations = new CancellationTokenSource();
+            canceled.Cancel();
+            canceled.Dispose();
+            _ = RunPttOperationAsync(() => _ptt.EndManualAsync());
         };
         window.DiscardRequested = () =>
         {
@@ -177,6 +220,81 @@ public sealed class DesktopComposition : IAsyncDisposable
             "プリンタを修復しました",
             Menu.RepairPrinterAsync);
         window.CallSignCommitRequested = CommitCallSignAsync;
+    }
+
+    private bool HasSelectedPttPort => !string.IsNullOrWhiteSpace(ViewModel.SelectedPttPort)
+        && !string.Equals(ViewModel.SelectedPttPort, "N/A", StringComparison.OrdinalIgnoreCase);
+
+    private async Task TogglePttConnectionAsync()
+    {
+        if (!ViewModel.CanTogglePttConnection) return;
+        var port = ViewModel.SelectedPttPort!;
+        var method = ViewModel.SelectedPttMethod;
+        var close = ViewModel.IsPttOpen;
+        ViewModel.IsPttConnectionPending = true;
+        try
+        {
+            if (close) await _ptt.CloseAsync(_pttOperations.Token);
+            else await _ptt.OpenAsync(port, method, _pttOperations.Token);
+        }
+        finally
+        {
+            ApplyPttSnapshot(_ptt.Snapshot);
+            ViewModel.IsPttConnectionPending = false;
+        }
+    }
+
+    private async Task BeginManualPttAsync()
+    {
+        if (!ViewModel.CanPressPtt) return;
+        ++_pendingManualPttPresses;
+        ViewModel.IsManualPttPending = true;
+        try
+        {
+            await _ptt.BeginManualAsync(ViewModel.SelectedPttPort!, ViewModel.SelectedPttMethod, _pttOperations.Token);
+        }
+        finally
+        {
+            ApplyPttSnapshot(_ptt.Snapshot);
+            ViewModel.IsManualPttPending = --_pendingManualPttPresses != 0;
+        }
+    }
+
+    private async Task RefreshPttPortsAsync(CancellationToken cancellationToken)
+    {
+        var ports = await _ptt.RefreshPortsAsync(cancellationToken);
+        if (Volatile.Read(ref _disposed) != 0 || !ViewModel.CanEditPttSettings) return;
+        var selected = ViewModel.SelectedPttPort;
+        var restored = ports.FirstOrDefault(port => string.Equals(port, selected, StringComparison.OrdinalIgnoreCase)) ?? "N/A";
+        _refreshingPttSelection = true;
+        try
+        {
+            ViewModel.PttPorts = ports;
+            ViewModel.SelectedPttPort = restored;
+        }
+        finally { _refreshingPttSelection = false; }
+
+        if (!string.Equals(selected, restored, StringComparison.Ordinal)) QueuePreferenceSave();
+    }
+
+    private async Task RunPttOperationAsync(Func<Task> operation)
+    {
+        if (Volatile.Read(ref _disposed) != 0) return;
+        try { await operation(); }
+        catch (OperationCanceledException) { }
+        catch (Exception exception) { ViewModel.ValidationError = $"PTT操作に失敗しました: {exception.Message}"; }
+    }
+
+    private void OnPttStateChanged(object? sender, PttSnapshot snapshot) => Dispatcher.UIThread.Post(() =>
+    {
+        if (ReferenceEquals(snapshot, _ptt.Snapshot)) ApplyPttSnapshot(snapshot);
+    });
+
+    private void ApplyPttSnapshot(PttSnapshot snapshot)
+    {
+        if (Volatile.Read(ref _disposed) != 0) return;
+        ViewModel.ApplyPttSnapshot(snapshot);
+        if (snapshot.Error is not null) ViewModel.ValidationError = $"PTT操作に失敗しました: {snapshot.Error}";
     }
 
     private async Task CommitCallSignAsync()
@@ -215,6 +333,7 @@ public sealed class DesktopComposition : IAsyncDisposable
     {
         ViewModel.PropertyChanged += (_, args) =>
         {
+            if (Volatile.Read(ref _disposed) != 0) return;
             if (args.PropertyName == nameof(MainWindowViewModel.SelectedJob)
                 && !_updatingSelection
                 && ViewModel.SelectedJob is { } selected)
@@ -224,6 +343,12 @@ public sealed class DesktopComposition : IAsyncDisposable
             if (args.PropertyName == nameof(MainWindowViewModel.SelectedAudioEndpoint))
             {
                 ApplyEndpointState(ViewModel);
+                QueuePreferenceSave();
+            }
+            else if (args.PropertyName is nameof(MainWindowViewModel.DeleteAfterSend)
+                or nameof(MainWindowViewModel.SelectedPttMethod)
+                || args.PropertyName == nameof(MainWindowViewModel.SelectedPttPort) && !_refreshingPttSelection)
+            {
                 QueuePreferenceSave();
             }
             else if (PreviewRegenerationPolicy.RequiresRegeneration(args.PropertyName))
@@ -257,8 +382,11 @@ public sealed class DesktopComposition : IAsyncDisposable
     }
 
     private UserPreferences CapturePreferences() => new(
-        ViewModel.CallSign, ViewModel.SelectedMode, ViewModel.IsDoubleHorizontal ? 2 : 1,
-        ViewModel.SelectedAudioEndpoint?.Id, ViewModel.StartAtSignIn, ViewModel.RotationDegrees);
+        ViewModel.CallSign, ViewModel.SelectedMode, ViewModel.StoredHorizontalSampleMultiplier,
+        ViewModel.SelectedAudioEndpoint?.Id, ViewModel.StartAtSignIn, ViewModel.RotationDegrees,
+        ViewModel.HeaderOverlayModeMask, ViewModel.DeleteAfterSend,
+        HasSelectedPttPort ? ViewModel.SelectedPttPort : null,
+        ViewModel.SelectedPttMethod == PttControlMethod.Dtr ? "DTR" : "RTS");
 
     private TimeSpan? Remaining() => ViewModel.Preview is { } preview
         ? TimeSpan.FromTicks((long)(preview.EstimatedDuration.Ticks * (1 - _transmission.Progress)))
@@ -266,6 +394,7 @@ public sealed class DesktopComposition : IAsyncDisposable
 
     private void OnQueueChanged(PrintJobQueueSnapshot snapshot)
     {
+        if (Volatile.Read(ref _disposed) != 0) return;
         var currentIds = snapshot.Waiting.Select(job => job.Id).ToHashSet();
         if (snapshot.Active is not null) currentIds.Add(snapshot.Active.Id);
         bool containsNewJob;
@@ -279,6 +408,7 @@ public sealed class DesktopComposition : IAsyncDisposable
 
     private async Task HandleQueueSnapshotAsync(PrintJobQueueSnapshot snapshot, bool containsNewJob)
     {
+        if (Volatile.Read(ref _disposed) != 0) return;
         try
         {
             ViewModel.WaitingJobs = snapshot.Active is { } active
@@ -311,7 +441,7 @@ public sealed class DesktopComposition : IAsyncDisposable
     {
         await ViewModel.UpdatePreviewAsync(selected, new TransmissionSettings(
             ViewModel.CallSign, ViewModel.SelectedMode, ViewModel.IsDoubleHorizontal ? 2 : 1,
-            ViewModel.RotationDegrees));
+            ViewModel.RotationDegrees, ViewModel.SelectedHeaderPlacement));
         if (ViewModel.IsReady) _preparedJobId = selected.Id;
     }
 
@@ -348,9 +478,23 @@ public sealed class DesktopComposition : IAsyncDisposable
         viewModel.RefreshAudioDisplay();
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        lock (_disposalGate)
+        {
+            return new(_disposalTask ??= DisposeCoreAsync());
+        }
+    }
+
+    private async Task DisposeCoreAsync()
+    {
+        Volatile.Write(ref _disposed, 1);
+        _transmission.Stop();
+        _pttOperations.Cancel();
+        try { await _ptt.DisposeAsync(); }
+        catch (Exception exception) { ViewModel.ValidationError = $"PTTを終了できません: {exception.Message}"; }
+        _ptt.StateChanged -= OnPttStateChanged;
+        Queue.Changed -= OnQueueChanged;
         QueuePreferenceSave();
         Task saveTask;
         lock (_preferenceGate) saveTask = _preferenceSaveTask;
@@ -361,6 +505,7 @@ public sealed class DesktopComposition : IAsyncDisposable
             try { await _audioWatchTask; } catch (OperationCanceledException) { }
         }
         await _host.DisposeAsync();
+        _pttOperations.Dispose();
         _shutdown.Dispose();
     }
 }

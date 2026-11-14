@@ -74,10 +74,10 @@ public sealed class TransmissionArtifactService : ITransmissionArtifactService
         var estimatedSamples = Math.Max(
             1L,
             (long)Math.Round(
-                prepared.EstimatedDuration.TotalSeconds * SstvEncodeOptions.SampleRate,
+                prepared.EstimatedDuration.TotalSeconds * SignalConstants.SampleRate,
                 MidpointRounding.AwayFromZero));
         progress?.Report(0);
-        await foreach (var block in SstvEncoder.EncodeAsync(
+        await foreach (var block in TransmissionEncoder.EncodeAsync(
             prepared.Frame, prepared.Options, cancellationToken).WithCancellation(cancellationToken))
         {
             yield return block;

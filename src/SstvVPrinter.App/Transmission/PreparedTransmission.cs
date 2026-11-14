@@ -4,6 +4,6 @@ namespace SstvVPrinter.App.Transmission;
 
 public sealed record PreparedTransmission(
     RgbFrame Frame,
-    SstvEncodeOptions Options,
+    TransmissionEncodeOptions Options,
     TimeSpan EstimatedDuration,
     DateTimeOffset HeaderTime);
