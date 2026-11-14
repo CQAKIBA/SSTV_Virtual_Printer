@@ -105,13 +105,17 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
     private bool _isPttOpen;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanStop))]
     private bool _isPttAsserted;
 
     [ObservableProperty]
     private bool _isPttBusy;
 
     [ObservableProperty]
-    private bool _canStop;
+    [NotifyPropertyChangedFor(nameof(CanStop))]
+    private bool _isManualPttPending;
+
+    private bool _canStopTransmission;
 
     [ObservableProperty]
     private bool _startAtSignIn = true;
@@ -189,6 +193,7 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
     public bool CanSend => IsReady && IsSelectedJobActive && !IsSettingsLocked && SelectedAudioEndpoint?.IsAvailable is true;
     public bool CanSaveWave => IsReady && IsSelectedJobActive && !IsSettingsLocked;
     public bool CanDiscard => (Preview is not null || SelectedJob is not null) && !IsSettingsLocked;
+    public bool CanStop => _canStopTransmission || IsManualPttPending || IsPttAsserted;
     public string RotationText => $"{RotationDegrees}°";
     public IReadOnlyList<PttControlMethod> PttMethods { get; } = [PttControlMethod.Rts, PttControlMethod.Dtr];
     public string PttConnectionButtonText => IsPttOpen ? "CLOSE" : "OPEN";
@@ -268,6 +273,7 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
 
     public void CancelPreparation()
     {
+        if (!_canStopTransmission) return;
         _preparationCancellation?.Cancel();
         if (IsSettingsLocked) return;
         IsReady = false;
@@ -291,7 +297,7 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
         ProgressPercent = Math.Clamp(progress, 0, 1) * 100;
         IsAppVolumeActive = state == JobState.Transmitting;
         IsSettingsLocked = state is JobState.Encoding or JobState.Transmitting;
-        CanStop = state is JobState.Preparing or JobState.Encoding or JobState.Transmitting;
+        SetProperty(ref _canStopTransmission, state is JobState.Preparing or JobState.Encoding or JobState.Transmitting, nameof(CanStop));
         StatusText = state switch
         {
             JobState.Encoding => "信号生成中",

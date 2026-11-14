@@ -34,6 +34,7 @@ public sealed class DesktopComposition : IAsyncDisposable
     private string _committedCallSign;
     private bool _updatingSelection;
     private bool _refreshingPttSelection;
+    private int _pendingManualPttPresses;
     private readonly object _queueIdentityGate = new();
     private HashSet<Guid> _knownJobIds = [];
     private int _disposed;
@@ -144,9 +145,7 @@ public sealed class DesktopComposition : IAsyncDisposable
             ? _ptt.CloseAsync(_pttOperations.Token)
             : HasSelectedPttPort ? _ptt.OpenAsync(ViewModel.SelectedPttPort!, ViewModel.SelectedPttMethod, _pttOperations.Token)
             : Task.CompletedTask);
-        window.ManualPttPressed = () => RunPttOperationAsync(() => HasSelectedPttPort
-            ? _ptt.BeginManualAsync(ViewModel.SelectedPttPort!, ViewModel.SelectedPttMethod, _pttOperations.Token)
-            : Task.CompletedTask);
+        window.ManualPttPressed = () => RunPttOperationAsync(BeginManualPttAsync);
         window.ManualPttReleased = () => RunPttOperationAsync(() => _ptt.EndManualAsync());
         _transmission.StateChanged += state => Dispatcher.UIThread.Post(() =>
             ViewModel.ApplyTransmissionState(state, _transmission.Progress, Remaining()));
@@ -228,6 +227,21 @@ public sealed class DesktopComposition : IAsyncDisposable
 
     private bool HasSelectedPttPort => !string.IsNullOrWhiteSpace(ViewModel.SelectedPttPort)
         && !string.Equals(ViewModel.SelectedPttPort, "N/A", StringComparison.OrdinalIgnoreCase);
+
+    private async Task BeginManualPttAsync()
+    {
+        if (!HasSelectedPttPort) return;
+        ++_pendingManualPttPresses;
+        ViewModel.IsManualPttPending = true;
+        try
+        {
+            await _ptt.BeginManualAsync(ViewModel.SelectedPttPort!, ViewModel.SelectedPttMethod, _pttOperations.Token);
+        }
+        finally
+        {
+            ViewModel.IsManualPttPending = --_pendingManualPttPresses != 0;
+        }
+    }
 
     private async Task RefreshPttPortsAsync(CancellationToken cancellationToken)
     {

@@ -1,7 +1,10 @@
+using Avalonia.Automation.Peers;
+using Avalonia.Automation.Provider;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
+using Avalonia.LogicalTree;
 using SstvVPrinter.App.Audio;
 using SstvVPrinter.App.Jobs;
 using SstvVPrinter.App.Settings;
@@ -187,6 +190,68 @@ public sealed class DesktopCompositionPttTests
     }
 
     [AvaloniaFact]
+    public async Task Stop_button_cancels_pending_manual_open_before_ptt_can_assert()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var stop = BindStopButton(fixture);
+        var openStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishOpen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var connection = fixture.Platform.Connection;
+        connection.OnOpen = () =>
+        {
+            openStarted.SetResult();
+            finishOpen.Task.GetAwaiter().GetResult();
+        };
+        var pressing = fixture.Window.ManualPttPressed!();
+        try
+        {
+            await openStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.True(stop.IsEffectivelyEnabled);
+            ((IInvokeProvider)new ButtonAutomationPeer(stop)).Invoke();
+            Dispatcher.UIThread.RunJobs();
+        }
+        finally
+        {
+            finishOpen.SetResult();
+            await pressing.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+
+        Assert.False(connection.EverAsserted);
+        Assert.False(connection.IsOpen);
+        Assert.False(stop.IsEffectivelyEnabled);
+    }
+
+    [AvaloniaFact]
+    public async Task Stop_button_releases_manual_ptt_and_disables_while_port_remains_open()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        await fixture.PrepareAsync();
+        var stop = BindStopButton(fixture);
+        await fixture.Window.PttOpenCloseRequested!();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(fixture.Platform.Connection.IsOpen);
+        Assert.False(stop.IsEffectivelyEnabled);
+
+        await fixture.Window.ManualPttPressed!();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(fixture.Platform.Connection.Rts);
+        Assert.True(stop.IsEffectivelyEnabled);
+
+        ((IInvokeProvider)new ButtonAutomationPeer(stop)).Invoke();
+        await WaitUntilAsync(() => !stop.IsEffectivelyEnabled);
+        Assert.False(fixture.Platform.Connection.Rts);
+        Assert.True(fixture.Platform.Connection.IsOpen);
+        Assert.True(fixture.Composition.ViewModel.CanSend);
+    }
+
+    private static Button BindStopButton(Fixture fixture)
+    {
+        fixture.Window.DataContext = fixture.Composition.ViewModel;
+        fixture.Composition.ViewModel.SelectedPttPort = "COM4";
+        return fixture.Window.GetLogicalDescendants().OfType<Button>().Single(button => button.Classes.Contains("stop"));
+    }
+
+    [AvaloniaFact]
     public async Task Shutdown_releases_and_closes_before_waiting_for_preferences_and_rejects_new_operations()
     {
         await using var fixture = await Fixture.CreateAsync();
@@ -289,9 +354,19 @@ public sealed class DesktopCompositionPttTests
         public bool Rts { get; private set; }
         public bool Dtr { get; private set; }
         public bool Disposed { get; private set; }
-        public void Open() => IsOpen = true;
+        public bool EverAsserted { get; private set; }
+        public Action? OnOpen { get; set; }
+        public void Open()
+        {
+            OnOpen?.Invoke();
+            IsOpen = true;
+        }
         public void Close() => IsOpen = false;
-        public void SetRts(bool value) => Rts = value;
+        public void SetRts(bool value)
+        {
+            Rts = value;
+            EverAsserted |= value;
+        }
         public void SetDtr(bool value) => Dtr = value;
         public void Dispose() => Disposed = true;
     }
