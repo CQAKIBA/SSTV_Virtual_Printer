@@ -3,6 +3,7 @@ using Avalonia.Automation.Provider;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Headless.XUnit;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.LogicalTree;
 using SstvVPrinter.App.Audio;
@@ -99,6 +100,83 @@ public sealed class DesktopCompositionPttTests
     [AvaloniaTheory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task Pending_open_locks_bound_ptt_controls_and_preserves_saved_selection(bool fails)
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        fixture.Window.AllowExplicitClose = true;
+        fixture.Window.DataContext = fixture.Composition.ViewModel;
+        fixture.Window.Show();
+        var viewModel = fixture.Composition.ViewModel;
+        var port = fixture.Window.FindControl<ComboBox>("PttPortComboBox")!;
+        var method = fixture.Window.GetLogicalDescendants().OfType<ComboBox>()
+            .Single(picker => ReferenceEquals(picker.ItemsSource, viewModel.PttMethods));
+        var toggle = fixture.Window.FindControl<Button>("PttConnectionButton")!;
+        var ptt = fixture.Window.FindControl<Button>("PttButton")!;
+        port.SelectedItem = "COM4";
+        var saves = fixture.Store.Saved.Count;
+        var openStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishOpen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Platform.Connection.OnOpen = () =>
+        {
+            openStarted.SetResult();
+            finishOpen.Task.GetAwaiter().GetResult();
+            if (fails) throw new IOException("open failed");
+        };
+
+        var toggleConnection = fixture.Window.PttOpenCloseRequested!;
+        Task opening = Task.CompletedTask;
+        fixture.Window.PttOpenCloseRequested = () => opening = toggleConnection();
+        try
+        {
+            Assert.True(port.Focus());
+            Assert.True(method.Focus());
+            toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.False(port.IsEffectivelyEnabled);
+            Assert.False(method.IsEffectivelyEnabled);
+            Assert.False(toggle.IsEffectivelyEnabled);
+            Assert.False(ptt.IsEffectivelyEnabled);
+            await openStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.False(port.Focus());
+            Assert.False(method.Focus());
+            viewModel.SelectedPttPort = "COM12";
+            viewModel.SelectedPttMethod = PttControlMethod.Dtr;
+            Assert.Equal("COM4", port.SelectedItem);
+            Assert.Equal(PttControlMethod.Rts, method.SelectedItem);
+            Assert.Equal(saves, fixture.Store.Saved.Count);
+        }
+        finally
+        {
+            finishOpen.TrySetResult();
+            await opening.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+
+        Assert.Equal(!fails, fixture.Platform.Connection.IsOpen);
+        Assert.Equal(!fails, viewModel.IsPttOpen);
+        Assert.Equal(fails ? "OPEN" : "CLOSE", toggle.Content);
+        Assert.Equal(fails, port.IsEffectivelyEnabled);
+        Assert.Equal(fails, method.IsEffectivelyEnabled);
+        Assert.True(toggle.IsEffectivelyEnabled);
+        Assert.True(ptt.IsEffectivelyEnabled);
+        Assert.Equal("COM4", fixture.Platform.OpenedPort);
+        Assert.Equal("COM4", port.SelectedItem);
+        Assert.Equal(PttControlMethod.Rts, method.SelectedItem);
+        Assert.Equal(saves, fixture.Store.Saved.Count);
+        Assert.Equal("COM4", fixture.Store.Saved[^1].PttPortName);
+        Assert.Equal("RTS", fixture.Store.Saved[^1].PttMethod);
+
+        if (!fails) await fixture.Window.PttOpenCloseRequested!();
+        Assert.True(port.IsEffectivelyEnabled);
+        Assert.True(method.IsEffectivelyEnabled);
+        port.SelectedItem = "COM12";
+        method.SelectedItem = PttControlMethod.Dtr;
+        Assert.Equal("COM12", fixture.Store.Saved[^1].PttPortName);
+        Assert.Equal("DTR", fixture.Store.Saved[^1].PttMethod);
+        fixture.Window.Close();
+    }
+
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task Ptt_delegate_failures_are_presented_without_escaping(bool cancellation)
     {
         await using var fixture = await Fixture.CreateAsync();
@@ -172,6 +250,56 @@ public sealed class DesktopCompositionPttTests
         await sending.WaitAsync(TimeSpan.FromSeconds(3));
         Assert.Equal(JobState.Stopped, fixture.Transmission.State);
         Assert.False(fixture.Platform.Connection.Rts);
+    }
+
+    [AvaloniaFact]
+    public async Task Stop_finishes_as_stopped_when_ptt_deassertion_stalls()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        await fixture.PrepareAsync();
+        var stop = BindStopButton(fixture);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Platform.HoldGateDelays = false;
+        fixture.Playback.OnPlay = token =>
+        {
+            started.SetResult();
+            return Task.Delay(Timeout.Infinite, token);
+        };
+        fixture.Composition.ViewModel.DeleteAfterSend = true;
+        var sending = fixture.Window.SendRequested!();
+        var releaseStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishRelease = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var connection = fixture.Platform.Connection;
+
+        try
+        {
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            connection.OnRtsRelease = () =>
+            {
+                releaseStarted.TrySetResult();
+                finishRelease.Task.GetAwaiter().GetResult();
+            };
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(stop.IsEffectivelyEnabled);
+            ((IInvokeProvider)new ButtonAutomationPeer(stop)).Invoke();
+            Dispatcher.UIThread.RunJobs();
+            await releaseStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await sending.WaitAsync(TimeSpan.FromSeconds(4));
+
+            Assert.Equal(JobState.Stopped, fixture.Transmission.State);
+            Assert.NotNull(fixture.Composition.Queue.Active);
+            Assert.False(fixture.Composition.ViewModel.IsPttOpen);
+            Assert.False(fixture.Composition.ViewModel.IsPttAsserted);
+            Assert.Contains("timed out", fixture.Composition.ViewModel.ValidationError);
+            Assert.False(connection.Disposed);
+        }
+        finally
+        {
+            finishRelease.TrySetResult();
+            await sending.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        await WaitUntilAsync(() => connection.Disposed);
+        Assert.False(connection.Rts);
     }
 
     [AvaloniaFact]
@@ -333,6 +461,7 @@ public sealed class DesktopCompositionPttTests
     {
         public string[] Ports { get; set; } = ["COM12", "COM4"];
         public FakeConnection Connection { get; } = new();
+        public string? OpenedPort { get; private set; }
         public Exception? Error { get; set; }
         public bool DiscoveredOnUiThread { get; private set; }
         public bool HoldGateDelays { get; set; } = true;
@@ -343,7 +472,11 @@ public sealed class DesktopCompositionPttTests
             return Ports;
         }
         public IPttSerialConnection CreateConnection(string portName)
-        { if (Error is not null) throw Error; return Connection; }
+        {
+            if (Error is not null) throw Error;
+            OpenedPort = portName;
+            return Connection;
+        }
         public Task DelayAsync(TimeSpan delay, CancellationToken cancellationToken) =>
             Task.Delay(HoldGateDelays ? Timeout.Infinite : 10, cancellationToken);
     }
@@ -356,6 +489,7 @@ public sealed class DesktopCompositionPttTests
         public bool Disposed { get; private set; }
         public bool EverAsserted { get; private set; }
         public Action? OnOpen { get; set; }
+        public Action? OnRtsRelease { get; set; }
         public void Open()
         {
             OnOpen?.Invoke();
@@ -364,6 +498,7 @@ public sealed class DesktopCompositionPttTests
         public void Close() => IsOpen = false;
         public void SetRts(bool value)
         {
+            if (!value && Rts) OnRtsRelease?.Invoke();
             Rts = value;
             EverAsserted |= value;
         }

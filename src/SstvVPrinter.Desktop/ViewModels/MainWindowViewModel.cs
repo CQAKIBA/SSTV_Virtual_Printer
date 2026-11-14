@@ -95,10 +95,8 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
     [ObservableProperty]
     private IReadOnlyList<string> _pttPorts = ["N/A"];
 
-    [ObservableProperty]
     private string? _selectedPttPort = "N/A";
 
-    [ObservableProperty]
     private PttControlMethod _selectedPttMethod = PttControlMethod.Rts;
 
     [ObservableProperty]
@@ -114,6 +112,9 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanStop))]
     private bool _isManualPttPending;
+
+    [ObservableProperty]
+    private bool _isPttConnectionPending;
 
     private bool _canStopTransmission;
 
@@ -195,13 +196,31 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
     public bool CanDiscard => (Preview is not null || SelectedJob is not null) && !IsSettingsLocked;
     public bool CanStop => _canStopTransmission || IsManualPttPending || IsPttAsserted;
     public string RotationText => $"{RotationDegrees}°";
+    public string? SelectedPttPort
+    {
+        get => _selectedPttPort;
+        set
+        {
+            if (CanEditPttSettings && SetProperty(ref _selectedPttPort, value)) NotifyPttState();
+        }
+    }
+    public PttControlMethod SelectedPttMethod
+    {
+        get => _selectedPttMethod;
+        set
+        {
+            if (CanEditPttSettings) SetProperty(ref _selectedPttMethod, value);
+        }
+    }
     public IReadOnlyList<PttControlMethod> PttMethods { get; } = [PttControlMethod.Rts, PttControlMethod.Dtr];
     public string PttConnectionButtonText => IsPttOpen ? "CLOSE" : "OPEN";
     public string PttConnectionBrush => IsPttOpen ? "#FF3D21" : "#344050";
     public string PttButtonBrush => IsPttAsserted ? "#FF3D21" : "#344050";
-    public bool CanEditPttSettings => !IsSettingsLocked && !IsPttOpen && !IsPttAsserted && !IsPttBusy;
-    public bool CanTogglePttConnection => !IsSettingsLocked && !IsPttBusy && !IsPttAsserted && (IsPttOpen || HasPttPort);
-    public bool CanPressPtt => !IsSettingsLocked && !IsPttBusy && HasPttPort;
+    public bool CanEditPttSettings => !IsSettingsLocked && !IsPttOpen && !IsPttAsserted && !IsPttBusy
+        && !IsPttConnectionPending && !IsManualPttPending;
+    public bool CanTogglePttConnection => !IsSettingsLocked && !IsPttBusy && !IsPttAsserted
+        && !IsPttConnectionPending && !IsManualPttPending && (IsPttOpen || HasPttPort);
+    public bool CanPressPtt => !IsSettingsLocked && !IsPttBusy && !IsPttConnectionPending && HasPttPort;
     private bool HasPttPort => !string.IsNullOrWhiteSpace(SelectedPttPort)
         && !string.Equals(SelectedPttPort, "N/A", StringComparison.OrdinalIgnoreCase);
 
@@ -339,8 +358,9 @@ public sealed partial class MainWindowViewModel(ITransmissionPreparationService 
     }
     partial void OnIsSelectedJobActiveChanged(bool value) => NotifyActionState();
     partial void OnSelectedJobChanged(PrintJob? value) => NotifyActionState();
-    partial void OnSelectedPttPortChanged(string? value) => NotifyPttState();
     partial void OnIsSettingsLockedChanged(bool value) => NotifyPttState();
+    partial void OnIsPttConnectionPendingChanged(bool value) => NotifyPttState();
+    partial void OnIsManualPttPendingChanged(bool value) => NotifyPttState();
 
     private void NotifyPttState()
     {

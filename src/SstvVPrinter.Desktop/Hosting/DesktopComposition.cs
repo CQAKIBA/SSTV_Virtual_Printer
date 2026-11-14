@@ -141,10 +141,7 @@ public sealed class DesktopComposition : IAsyncDisposable
     {
         _ptt.StateChanged += OnPttStateChanged;
         window.PttPortsRefreshRequested = () => RunPttOperationAsync(() => RefreshPttPortsAsync(_pttOperations.Token));
-        window.PttOpenCloseRequested = () => RunPttOperationAsync(() => _ptt.Snapshot.IsOpen
-            ? _ptt.CloseAsync(_pttOperations.Token)
-            : HasSelectedPttPort ? _ptt.OpenAsync(ViewModel.SelectedPttPort!, ViewModel.SelectedPttMethod, _pttOperations.Token)
-            : Task.CompletedTask);
+        window.PttOpenCloseRequested = () => RunPttOperationAsync(TogglePttConnectionAsync);
         window.ManualPttPressed = () => RunPttOperationAsync(BeginManualPttAsync);
         window.ManualPttReleased = () => RunPttOperationAsync(() => _ptt.EndManualAsync());
         _transmission.StateChanged += state => Dispatcher.UIThread.Post(() =>
@@ -228,9 +225,28 @@ public sealed class DesktopComposition : IAsyncDisposable
     private bool HasSelectedPttPort => !string.IsNullOrWhiteSpace(ViewModel.SelectedPttPort)
         && !string.Equals(ViewModel.SelectedPttPort, "N/A", StringComparison.OrdinalIgnoreCase);
 
+    private async Task TogglePttConnectionAsync()
+    {
+        if (!ViewModel.CanTogglePttConnection) return;
+        var port = ViewModel.SelectedPttPort!;
+        var method = ViewModel.SelectedPttMethod;
+        var close = ViewModel.IsPttOpen;
+        ViewModel.IsPttConnectionPending = true;
+        try
+        {
+            if (close) await _ptt.CloseAsync(_pttOperations.Token);
+            else await _ptt.OpenAsync(port, method, _pttOperations.Token);
+        }
+        finally
+        {
+            ApplyPttSnapshot(_ptt.Snapshot);
+            ViewModel.IsPttConnectionPending = false;
+        }
+    }
+
     private async Task BeginManualPttAsync()
     {
-        if (!HasSelectedPttPort) return;
+        if (!ViewModel.CanPressPtt) return;
         ++_pendingManualPttPresses;
         ViewModel.IsManualPttPending = true;
         try
@@ -239,6 +255,7 @@ public sealed class DesktopComposition : IAsyncDisposable
         }
         finally
         {
+            ApplyPttSnapshot(_ptt.Snapshot);
             ViewModel.IsManualPttPending = --_pendingManualPttPresses != 0;
         }
     }
@@ -246,7 +263,7 @@ public sealed class DesktopComposition : IAsyncDisposable
     private async Task RefreshPttPortsAsync(CancellationToken cancellationToken)
     {
         var ports = await _ptt.RefreshPortsAsync(cancellationToken);
-        if (Volatile.Read(ref _disposed) != 0) return;
+        if (Volatile.Read(ref _disposed) != 0 || !ViewModel.CanEditPttSettings) return;
         var selected = ViewModel.SelectedPttPort;
         var restored = ports.FirstOrDefault(port => string.Equals(port, selected, StringComparison.OrdinalIgnoreCase)) ?? "N/A";
         _refreshingPttSelection = true;
@@ -270,10 +287,15 @@ public sealed class DesktopComposition : IAsyncDisposable
 
     private void OnPttStateChanged(object? sender, PttSnapshot snapshot) => Dispatcher.UIThread.Post(() =>
     {
+        if (ReferenceEquals(snapshot, _ptt.Snapshot)) ApplyPttSnapshot(snapshot);
+    });
+
+    private void ApplyPttSnapshot(PttSnapshot snapshot)
+    {
         if (Volatile.Read(ref _disposed) != 0) return;
         ViewModel.ApplyPttSnapshot(snapshot);
         if (snapshot.Error is not null) ViewModel.ValidationError = $"PTT操作に失敗しました: {snapshot.Error}";
-    });
+    }
 
     private async Task CommitCallSignAsync()
     {

@@ -28,7 +28,7 @@ public sealed class SerialPttTransmissionGate(
             await platform.DelayAsync(TimeSpan.FromSeconds(1), linked.Token).ConfigureAwait(false);
             linked.Token.ThrowIfCancellationRequested();
             await lease.ReleaseAsync().ConfigureAwait(false);
-            lease.FaultToken.ThrowIfCancellationRequested();
+            linked.Token.ThrowIfCancellationRequested();
         }
         catch (Exception error)
         {
@@ -36,9 +36,11 @@ public sealed class SerialPttTransmissionGate(
             try { await lease.AbortAsync().ConfigureAwait(false); }
             catch (Exception cleanupError)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 throw new IOException("PTT release failed.", new AggregateException(error, cleanupError));
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             // Playback must unwind before a device cancellation becomes a job failure.
             if (lease.FaultToken.IsCancellationRequested)
                 throw new IOException(controller.Snapshot.Error ?? "PTT connection failed.", error);

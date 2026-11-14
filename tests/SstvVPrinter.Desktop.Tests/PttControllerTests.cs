@@ -350,6 +350,49 @@ public sealed class PttControllerTests
         }
     }
 
+    [Fact]
+    public async Task Manual_release_timeout_detaches_stalled_connection_before_late_cleanup()
+    {
+        var platform = new FakePlatform();
+        await using var controller = new PttController(platform);
+        var cancellation = TestContext.Current.CancellationToken;
+        await controller.BeginManualAsync("COM2", PttControlMethod.Rts, cancellation);
+        var oldConnection = platform.Connection;
+        oldConnection.BlockNextRtsLow = true;
+        var release = controller.EndManualAsync(cancellation);
+
+        try
+        {
+            await oldConnection.RtsLowStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), cancellation);
+            var error = await Record.ExceptionAsync(() => release.WaitAsync(TimeSpan.FromSeconds(4), cancellation));
+            Assert.IsType<TimeoutException>(error);
+            Assert.True(release.IsFaulted, "Release must time out before the blocked driver call returns.");
+            Assert.False(controller.Snapshot.IsOpen);
+            Assert.False(controller.Snapshot.IsAsserted);
+            Assert.Contains("timed out", controller.Snapshot.Error);
+            Assert.DoesNotContain("dispose", oldConnection.Calls);
+
+            var replacement = platform.NextConnection = new FakeConnection();
+            await controller.BeginManualAsync("COM2", PttControlMethod.Dtr, cancellation)
+                .WaitAsync(TimeSpan.FromSeconds(5), cancellation);
+            var replacementState = controller.Snapshot;
+            oldConnection.ContinueRtsLow.TrySetResult();
+            await oldConnection.Disposed.Task.WaitAsync(TimeSpan.FromSeconds(5), cancellation);
+
+            Assert.Same(replacementState, controller.Snapshot);
+            Assert.True(replacement.Dtr);
+            Assert.DoesNotContain("close", replacement.Calls);
+            Assert.DoesNotContain("dispose", replacement.Calls);
+            Assert.False(oldConnection.Rts);
+            Assert.False(oldConnection.IsOpen);
+        }
+        finally
+        {
+            oldConnection.ContinueRtsLow.TrySetResult();
+            await Record.ExceptionAsync(() => release.WaitAsync(TimeSpan.FromSeconds(5), cancellation));
+        }
+    }
+
     private sealed class FakePlatform : IPttPlatform
     {
         private readonly Channel<TaskCompletionSource> delays = Channel.CreateUnbounded<TaskCompletionSource>();

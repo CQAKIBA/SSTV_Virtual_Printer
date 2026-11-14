@@ -1,8 +1,11 @@
+using System.Runtime.ExceptionServices;
+
 namespace SstvVPrinter.Desktop.Ptt;
 
 /// <summary>Owns one serial connection. Serial operations and discovery run on worker threads.</summary>
 public sealed class PttController(IPttPlatform platform) : IAsyncDisposable
 {
+    private static readonly TimeSpan SerialCleanupTimeout = TimeSpan.FromSeconds(2);
     private readonly SemaphoreSlim mutex = new(1, 1);
     private readonly CancellationTokenSource shutdown = new();
     private readonly object stateLock = new();
@@ -119,7 +122,7 @@ public sealed class PttController(IPttPlatform platform) : IAsyncDisposable
             try { CloseCore(boundCleanup: false); }
             finally { mutex.Release(); shutdown.Dispose(); }
         });
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        using var timeout = new CancellationTokenSource(SerialCleanupTimeout);
         try { await cleanup.WaitAsync(timeout.Token).ConfigureAwait(false); }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested)
         {
@@ -207,13 +210,50 @@ public sealed class PttController(IPttPlatform platform) : IAsyncDisposable
 
     private void ReleaseCore()
     {
+        var releasing = connection!;
+        var release = Task.Run(() => ReleaseSerial(releasing));
+        Exception? error;
         try
         {
-            connection?.SetRts(false);
-            connection?.SetDtr(false);
-            Publish(snapshot with { IsAsserted = false, IsBusy = false });
+            error = release.WaitAsync(SerialCleanupTimeout).GetAwaiter().GetResult();
         }
-        catch (Exception ex) { FaultCore(ex); throw; }
+        catch (TimeoutException timeout)
+        {
+            DetachConnection();
+            _ = release.ContinueWith(completed =>
+            {
+                // Release already cleaned up on failure. Otherwise both lines are now low.
+                if (completed.Result is null) CleanupSerial(releasing, deassert: false);
+            }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+            var failure = new TimeoutException("Serial PTT release timed out and cleanup is continuing in the background.", timeout);
+            FaultCore(failure);
+            throw failure;
+        }
+
+        if (error is not null)
+        {
+            // ReleaseSerial already cleaned up the connection before returning the error.
+            DetachConnection();
+            FaultCore(error);
+            ExceptionDispatchInfo.Throw(error);
+        }
+
+        Publish(snapshot with { IsAsserted = false, IsBusy = false });
+    }
+
+    private static Exception? ReleaseSerial(IPttSerialConnection releasing)
+    {
+        try
+        {
+            releasing.SetRts(false);
+            releasing.SetDtr(false);
+            return null;
+        }
+        catch (Exception error)
+        {
+            CleanupSerial(releasing);
+            return error;
+        }
     }
 
     private void CloseCore(bool boundCleanup = true)
@@ -228,16 +268,14 @@ public sealed class PttController(IPttPlatform platform) : IAsyncDisposable
 
     private Exception? CleanupConnection(bool boundCleanup = true)
     {
-        StopMonitor();
-        var closing = connection;
-        connection = null;
+        var closing = DetachConnection();
         if (closing is null) return null;
         if (!boundCleanup) return CleanupSerial(closing);
 
         // The detached worker only sees this connection. It never accesses controller state,
         // so a driver that resumes after the bound cannot affect a replacement connection.
         var cleanup = Task.Run(() => CleanupSerial(closing));
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        using var timeout = new CancellationTokenSource(SerialCleanupTimeout);
         try { return cleanup.WaitAsync(timeout.Token).GetAwaiter().GetResult(); }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested)
         {
@@ -245,12 +283,23 @@ public sealed class PttController(IPttPlatform platform) : IAsyncDisposable
         }
     }
 
-    private static Exception? CleanupSerial(IPttSerialConnection closing)
+    private IPttSerialConnection? DetachConnection()
+    {
+        StopMonitor();
+        var detached = connection;
+        connection = null;
+        return detached;
+    }
+
+    private static Exception? CleanupSerial(IPttSerialConnection closing, bool deassert = true)
     {
         Exception? error = null;
         void Try(Action action) { try { action(); } catch (Exception ex) { error ??= ex; } }
-        Try(() => closing.SetRts(false));
-        Try(() => closing.SetDtr(false));
+        if (deassert)
+        {
+            Try(() => closing.SetRts(false));
+            Try(() => closing.SetDtr(false));
+        }
         Try(closing.Close);
         Try(closing.Dispose);
         return error;
